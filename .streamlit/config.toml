@@ -1,0 +1,23 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# DeepWatch v1.0 — Streamlit App Config
+# Save as:  .streamlit/config.toml
+# ─────────────────────────────────────────────────────────────────────────────
+
+[server]
+# Raise upload limit for future snapshot import features
+maxUploadSize = 50           # MB
+headless      = true         # needed when running behind a proxy / on a server
+enableCORS    = false
+enableXsrfProtection = false
+
+[browser]
+# Suppress "you can now view your app" banner in logs
+gatherUsageStats = false
+
+[theme]
+base            = "dark"
+backgroundColor         = "#04060f"
+secondaryBackgroundColor = "#00111f"
+textColor       = "#b8cce0"
+primaryColor    = "#00c8ff"
+font            = "monospace"

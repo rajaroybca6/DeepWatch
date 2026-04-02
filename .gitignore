@@ -1,0 +1,55 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# VisionAI Pro v3.0 — .gitignore
+# ─────────────────────────────────────────────────────────────────────────────
+
+# !! NEVER commit secrets !!
+.streamlit/secrets.toml
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Virtual environments
+venv/
+env/
+.venv/
+.env/
+
+# YOLO model weights (large binary files — download on demand)
+*.pt
+*.onnx
+*.engine
+
+# SQLite database (contains event data — exclude or keep, your choice)
+*.db
+*.sqlite
+*.sqlite3
+
+# Streamlit cache
+.streamlit/cache/
+
+# macOS
+.DS_Store
+
+# Windows
+Thumbs.db
+desktop.ini
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Logs
+*.log
