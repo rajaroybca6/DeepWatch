@@ -1,9 +1,21 @@
 """
-DeepWatch v2.0 — Enterprise AI Security Platform
-=================================================
-Full-featured AI surveillance dashboard — Enterprise Edition
-UI: Multinational company-standard design (Bosch/Honeywell/Palantir inspired)
-    Pure light theme · Zero dark/black colors · Professional blue accent system
+DeepWatch v1.0 — Advanced CCTV Control Room
+============================================
+Full-featured AI surveillance dashboard with:
+  • YOLOv8 real-time object detection
+  • Multi-camera support (switchable front/rear)
+  • Virtual boundary / tripwire zones (configurable)
+  • Person tracking with unique IDs (ByteTrack)
+  • Loitering detection (time-in-zone)
+  • Crowd density estimation
+  • Heatmap accumulation
+  • Auto-snapshots with annotated overlay
+  • Email alerts with snapshot attachment
+  • Scheduled / Vacation / Always-On modes
+  • SQLite event persistence across sessions
+  • CSV / JSON export of event log
+  • Streamlit real-time metric updates via st.empty()
+  • Full dark cyberpunk UI (Share Tech Mono + Exo 2)
 
 Run:
     pip install streamlit streamlit-webrtc ultralytics opencv-python-headless \
@@ -26,531 +38,249 @@ from pathlib import Path
 
 # ─────────────────────────── PAGE CONFIG ──────────────────────────────────────
 st.set_page_config(
-    page_title="DeepWatch Enterprise — AI Security Platform",
+    page_title="DeepWatch — AI CCTV Control Room",
     layout="wide",
     initial_sidebar_state="expanded",
-    menu_items={"About": "DeepWatch v2.0 Enterprise — AI-Powered Security Intelligence"},
+    menu_items={"About": "DeepWatch v1.0 — Deep Learning Meets Real-Time Security"},
 )
 
 # ─────────────────────────────── CSS ──────────────────────────────────────────
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&family=IBM+Plex+Mono:wght@400;500;600&family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,600;0,9..144,700;1,9..144,300&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Exo+2:ital,wght@0,300;0,400;0,600;0,700;0,900;1,400&display=swap');
 
-:root {
-    --bg-base:       #F5F6FA;
-    --bg-surface:    #FFFFFF;
-    --bg-raised:     #FAFBFE;
-    --bg-subtle:     #EEF0F8;
-    --bg-muted:      #E8EAF4;
-    --border-light:  rgba(37,99,235,0.08);
-    --border-mid:    rgba(37,99,235,0.15);
-    --border-strong: rgba(37,99,235,0.25);
-    --text-primary:  #0F1729;
-    --text-secondary:#3D4E6B;
-    --text-tertiary: #7B8DB0;
-    --text-muted:    #A8B4CC;
-    --brand-50:  #EFF4FF;
-    --brand-100: #DBEAFE;
-    --brand-400: #60A5FA;
-    --brand-500: #3B82F6;
-    --brand-600: #2563EB;
-    --brand-700: #1D4ED8;
-    --success-50:  #F0FDF4;
-    --success-500: #22C55E;
-    --success-600: #16A34A;
-    --warning-50:  #FFFBEB;
-    --warning-500: #F59E0B;
-    --warning-600: #D97706;
-    --danger-50:   #FFF1F2;
-    --danger-400:  #FB7185;
-    --danger-500:  #EF4444;
-    --danger-600:  #DC2626;
-    --teal-500:  #14B8A6;
-    --violet-500: #8B5CF6;
-    --shadow-xs: 0 1px 2px rgba(15,23,41,0.04);
-    --shadow-sm: 0 1px 3px rgba(15,23,41,0.06),0 1px 2px rgba(15,23,41,0.04);
-    --shadow-md: 0 4px 6px rgba(15,23,41,0.05),0 2px 4px rgba(15,23,41,0.04);
-    --shadow-lg: 0 10px 15px rgba(15,23,41,0.06),0 4px 6px rgba(15,23,41,0.04);
-    --shadow-xl: 0 20px 25px rgba(15,23,41,0.07),0 8px 10px rgba(15,23,41,0.04);
-    --radius-sm: 6px;
-    --radius-md: 10px;
-    --radius-lg: 14px;
-    --radius-xl: 18px;
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body, .stApp {
+    background: #04060f;
+    color: #b8cce0;
+    font-family: 'Exo 2', sans-serif;
 }
 
-*,*::before,*::after { box-sizing:border-box; margin:0; padding:0; }
-
-html,body,.stApp {
-    background: var(--bg-base) !important;
-    color: var(--text-primary);
-    font-family: 'Plus Jakarta Sans', sans-serif;
-    font-size: 14px; line-height: 1.5;
-    -webkit-font-smoothing: antialiased;
-}
-
+/* ── Animated grid background ── */
 .stApp::before {
     content: '';
-    position: fixed; inset: 0; z-index: -3;
-    background:
-        radial-gradient(ellipse 900px 600px at 0% -100px,rgba(59,130,246,0.05) 0%,transparent 60%),
-        radial-gradient(ellipse 600px 400px at 100% 100%,rgba(20,184,166,0.04) 0%,transparent 55%),
-        radial-gradient(ellipse 400px 300px at 60% 40%,rgba(245,158,11,0.025) 0%,transparent 60%);
-    background-color: var(--bg-base);
+    position: fixed; inset: 0; z-index: -2;
+    background-image:
+        linear-gradient(rgba(0,180,255,0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0,180,255,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
 }
 .stApp::after {
     content: '';
-    position: fixed; inset: 0; z-index: -2; pointer-events: none;
-    background-image:
-        linear-gradient(rgba(59,130,246,0.032) 1px,transparent 1px),
-        linear-gradient(90deg,rgba(59,130,246,0.032) 1px,transparent 1px);
-    background-size: 56px 56px;
+    position: fixed; inset: 0; z-index: -1; pointer-events: none;
+    background:
+        radial-gradient(ellipse 80% 60% at 0% 0%,   rgba(0,40,80,0.6) 0%, transparent 50%),
+        radial-gradient(ellipse 60% 50% at 100% 100%, rgba(0,10,40,0.8) 0%, transparent 50%),
+        radial-gradient(ellipse 40% 30% at 50% 50%,  rgba(0,180,255,0.04) 0%, transparent 70%);
 }
 
-.main .block-container { padding:0.5rem 1.25rem 1.5rem; max-width:100%; }
+/* ── Scanlines overlay ── */
+body::after {
+    content: '';
+    position: fixed; inset: 0; z-index: 9998; pointer-events: none;
+    background: repeating-linear-gradient(
+        0deg, transparent, transparent 3px,
+        rgba(0,0,0,0.04) 3px, rgba(0,0,0,0.04) 4px
+    );
+}
 
-/* ── SIDEBAR ── */
+/* ── Layout ── */
+.main .block-container { padding: 0.5rem 1rem 1rem; max-width: 100%; }
 section[data-testid="stSidebar"] {
-    background: var(--bg-surface) !important;
-    border-right: 1px solid var(--border-light) !important;
-    box-shadow: var(--shadow-lg) !important;
+    background: rgba(2,6,18,0.97) !important;
+    border-right: 1px solid rgba(0,180,255,0.12) !important;
     width: 280px !important;
 }
-section[data-testid="stSidebar"] * { color: var(--text-secondary) !important; }
-section[data-testid="stSidebar"] label {
-    font-size:.75rem !important; font-weight:500 !important;
-    color:var(--text-tertiary) !important; letter-spacing:.2px !important;
-}
-section[data-testid="stSidebar"] .stSlider { padding-bottom:4px !important; }
-section[data-testid="stSidebar"]::before {
-    content:'';
-    position:absolute; top:0; left:0; width:100%; height:3px;
-    background:linear-gradient(90deg,var(--brand-600),var(--teal-500),var(--warning-500));
-}
+section[data-testid="stSidebar"] * { color: #b8cce0 !important; }
+section[data-testid="stSidebar"] label { font-size: .78rem !important; }
+section[data-testid="stSidebar"] .stSlider { padding-bottom: 6px !important; }
 
-/* ── TOPBAR ── */
+/* ── Top Bar ── */
 .topbar {
-    display:flex; align-items:center; justify-content:space-between;
-    background:var(--bg-surface);
-    border:1px solid var(--border-light);
-    border-radius:var(--radius-xl);
-    padding:13px 26px; margin-bottom:14px;
-    box-shadow:var(--shadow-md);
-    position:relative; overflow:hidden;
+    display: flex; align-items: center; justify-content: space-between;
+    background: linear-gradient(90deg, rgba(0,20,50,0.95), rgba(0,10,30,0.95));
+    border: 1px solid rgba(0,180,255,0.25);
+    border-radius: 10px; padding: 10px 22px; margin-bottom: 10px;
+    backdrop-filter: blur(12px);
+    box-shadow: 0 0 30px rgba(0,180,255,0.08), inset 0 1px 0 rgba(255,255,255,0.04);
 }
-.topbar::before {
-    content:'';
-    position:absolute; top:0; left:0; right:0; height:2.5px;
-    background:linear-gradient(90deg,
-        var(--brand-600) 0%,var(--brand-400) 35%,
-        var(--teal-500) 65%,var(--warning-500) 100%);
-}
-.topbar-left { display:flex; align-items:center; gap:16px; }
+.topbar-left { display: flex; align-items: center; gap: 18px; }
 .topbar-logo {
-    font-family:'Fraunces',serif;
-    font-size:1.35rem; font-weight:700;
-    color:var(--text-primary); letter-spacing:-.3px;
-    display:flex; align-items:center; gap:10px;
+    font-family: 'Share Tech Mono', monospace; font-size: 1.25rem;
+    color: #00c8ff; letter-spacing: 4px;
+    text-shadow: 0 0 20px rgba(0,200,255,0.6), 0 0 40px rgba(0,200,255,0.2);
 }
-.topbar-logo-icon {
-    width:34px; height:34px; border-radius:9px;
-    background:linear-gradient(135deg,var(--brand-600),var(--brand-400));
-    display:flex; align-items:center; justify-content:center;
-    box-shadow:0 4px 12px rgba(37,99,235,0.25);
-    font-size:.9rem; flex-shrink:0;
-}
-.topbar-logo em { color:var(--brand-600); font-style:normal; }
-.topbar-divider { width:1px; height:24px; background:var(--border-mid); }
+.topbar-logo em { color: #ff3e3e; font-style: normal; }
 .topbar-badge {
-    background:var(--brand-50); border:1px solid var(--border-mid);
-    border-radius:var(--radius-sm); padding:3px 10px;
-    font-family:'IBM Plex Mono',monospace;
-    font-size:.62rem; font-weight:500;
-    color:var(--brand-600); letter-spacing:.5px;
-}
-.topbar-badge-warn {
-    background:var(--warning-50); border-color:rgba(245,158,11,0.25);
-    color:var(--warning-600);
+    background: rgba(0,200,255,0.1); border: 1px solid rgba(0,200,255,0.3);
+    border-radius: 4px; padding: 2px 10px;
+    font-family: 'Share Tech Mono', monospace; font-size: .65rem;
+    color: #00c8ff; letter-spacing: 2px;
 }
 .topbar-status {
-    display:flex; gap:20px; align-items:center;
-    font-family:'IBM Plex Mono',monospace;
-    font-size:.67rem; color:var(--text-tertiary);
+    display: flex; gap: 16px; align-items: center;
+    font-family: 'Share Tech Mono', monospace; font-size: .72rem; color: #456;
 }
-.status-item { display:flex; align-items:center; gap:7px; }
-.status-label { color:var(--text-muted); font-size:.62rem; letter-spacing:.5px; }
-.status-value { color:var(--text-secondary); font-weight:500; }
+.sdot {
+    width: 7px; height: 7px; border-radius: 50%; display: inline-block; margin-right: 5px;
+}
+.sdot-g { background:#00ff88; box-shadow:0 0 8px #00ff88; animation: sblink 2s ease infinite; }
+.sdot-r { background:#ff3030; box-shadow:0 0 8px #ff3030; animation: sblink .8s ease infinite; }
+.sdot-y { background:#ffc400; box-shadow:0 0 8px #ffc400; animation: sblink 1.5s ease infinite; }
+.sdot-b { background:#00c8ff; box-shadow:0 0 8px #00c8ff; }
+@keyframes sblink { 0%,100%{opacity:1} 50%{opacity:.3} }
 
-.sdot { width:6px; height:6px; border-radius:50%; display:inline-block; flex-shrink:0; }
-.sdot-online  { background:var(--success-500); box-shadow:0 0 0 3px rgba(34,197,94,0.15);  animation:pg 2.5s ease infinite; }
-.sdot-active  { background:var(--brand-500);   box-shadow:0 0 0 3px rgba(59,130,246,0.15); }
-.sdot-warn    { background:var(--warning-500); box-shadow:0 0 0 3px rgba(245,158,11,0.15); animation:py 1.8s ease infinite; }
-.sdot-danger  { background:var(--danger-500);  box-shadow:0 0 0 3px rgba(239,68,68,0.15);  animation:pr .8s ease infinite; }
-@keyframes pg  { 0%,100%{opacity:1} 50%{opacity:.4} }
-@keyframes py  { 0%,100%{opacity:1} 50%{opacity:.3} }
-@keyframes pr  { 0%,100%{opacity:1} 50%{opacity:.2} }
-
-/* ── METRIC CARDS ── */
-.mgrid {
-    display:grid; grid-template-columns:repeat(5,1fr);
-    gap:12px; margin-bottom:14px;
-}
-.mcard {
-    background:var(--bg-surface);
-    border:1px solid var(--border-light);
-    border-radius:var(--radius-lg);
-    padding:16px 18px 14px;
-    position:relative; overflow:hidden;
-    box-shadow:var(--shadow-sm);
-    transition:box-shadow .2s ease,transform .2s ease,border-color .2s ease;
-    cursor:default;
-}
-.mcard:hover {
-    box-shadow:var(--shadow-lg);
-    border-color:var(--border-strong);
-    transform:translateY(-2px);
-}
-.mcard::before {
-    content:''; position:absolute;
-    top:0; left:18px; right:18px; height:2px;
-    background:var(--mc,var(--brand-500));
-    border-radius:0 0 3px 3px;
-}
-.mcard::after {
-    content:''; position:absolute;
-    bottom:-15px; right:-10px;
-    width:80px; height:80px; border-radius:50%;
-    background:radial-gradient(circle,var(--mc,var(--brand-500)) 0%,transparent 70%);
-    opacity:.06;
-}
-.mcard-icon {
-    font-size:.85rem; margin-bottom:8px;
-    width:30px; height:30px; border-radius:8px;
-    background:var(--mb,var(--brand-50));
-    display:flex; align-items:center; justify-content:center;
-}
-.mval {
-    font-family:'Fraunces',serif;
-    font-size:2.1rem; font-weight:600;
-    color:var(--mc,var(--brand-600));
-    line-height:1; margin-bottom:4px; letter-spacing:-.5px;
-}
-.mlbl {
-    font-size:.7rem; font-weight:600;
-    color:var(--text-tertiary);
-    letter-spacing:.8px; text-transform:uppercase;
-}
-.msub {
-    font-size:.65rem; color:var(--text-muted);
-    margin-top:2px; font-family:'IBM Plex Mono',monospace;
-}
-
-/* ── PANELS ── */
+/* ── Panels ── */
 .panel {
-    background:var(--bg-surface);
-    border:1px solid var(--border-light);
-    border-radius:var(--radius-xl);
-    padding:18px 20px 16px; margin-bottom:12px;
-    box-shadow:var(--shadow-sm);
-    position:relative; overflow:hidden;
+    background: rgba(0,12,28,0.88);
+    border: 1px solid rgba(0,180,255,0.14);
+    border-radius: 10px; padding: 14px;
+    backdrop-filter: blur(10px);
+    margin-bottom: 10px;
+    box-shadow: 0 4px 30px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.03);
 }
 .panel-hdr {
-    display:flex; align-items:center; justify-content:space-between;
-    margin-bottom:14px; padding-bottom:12px;
-    border-bottom:1px solid var(--border-light);
+    font-family: 'Share Tech Mono', monospace; font-size: .7rem;
+    color: #00c8ff; letter-spacing: 2.5px; text-transform: uppercase;
+    margin-bottom: 10px; padding-bottom: 8px;
+    border-bottom: 1px solid rgba(0,180,255,0.1);
+    display: flex; align-items: center; justify-content: space-between;
 }
-.panel-hdr-left { display:flex; align-items:center; gap:10px; }
-.panel-hdr-dot {
-    width:8px; height:8px; border-radius:50%;
-    background:var(--brand-500);
-    box-shadow:0 0 0 3px rgba(59,130,246,0.12);
+.panel-hdr-badge {
+    background: rgba(0,200,255,0.1); border: 1px solid rgba(0,200,255,0.25);
+    border-radius: 3px; padding: 1px 8px; font-size: .62rem; color: #00c8ff;
 }
-.panel-hdr-title {
-    font-family:'Plus Jakarta Sans',sans-serif;
-    font-size:.72rem; font-weight:700;
-    color:var(--text-secondary);
-    letter-spacing:1.5px; text-transform:uppercase;
-}
-.panel-badge {
-    font-family:'IBM Plex Mono',monospace;
-    font-size:.6rem; font-weight:500;
-    color:var(--brand-600); background:var(--brand-50);
-    border:1px solid var(--border-mid);
-    border-radius:20px; padding:2px 10px; letter-spacing:.3px;
-}
-.panel-badge-live {
-    color:var(--success-600); background:var(--success-50);
-    border-color:rgba(34,197,94,0.2);
-    animation:lp 2s ease infinite;
-}
-@keyframes lp { 0%,100%{opacity:1} 50%{opacity:.55} }
 
-/* ── ALERTS ── */
-.alert-critical {
-    display:flex; align-items:flex-start; gap:12px;
-    background:var(--danger-50);
-    border:1px solid rgba(239,68,68,0.22);
-    border-left:3px solid var(--danger-500);
-    border-radius:var(--radius-md);
-    padding:11px 16px; margin:6px 0;
-    animation:ap .9s ease infinite alternate;
-    box-shadow:0 2px 8px rgba(239,68,68,0.07);
+/* ── Metric Grid ── */
+.mgrid { display: grid; grid-template-columns: repeat(5,1fr); gap: 8px; margin-bottom: 10px; }
+.mcard {
+    background: rgba(0,15,35,0.92);
+    border: 1px solid rgba(0,180,255,0.18);
+    border-radius: 8px; padding: 11px 13px;
+    position: relative; overflow: hidden;
+    transition: border-color .3s;
 }
-.alert-critical-icon { font-size:1rem; flex-shrink:0; margin-top:1px; }
-.alert-critical-title {
-    font-size:.78rem; font-weight:700;
-    color:var(--danger-600);
-    font-family:'Plus Jakarta Sans',sans-serif; margin-bottom:2px;
+.mcard::before {
+    content: ''; position: absolute; top:0; left:0; right:0; height:2px;
+    background: linear-gradient(90deg, var(--ac) 0%, transparent 100%);
 }
-.alert-critical-sub {
-    font-size:.67rem; color:rgba(220,38,38,0.65);
-    font-family:'IBM Plex Mono',monospace;
+.mcard::after {
+    content: ''; position: absolute; bottom:0; right:0;
+    width: 50px; height: 50px; border-radius: 50%;
+    background: radial-gradient(circle, var(--ac) 0%, transparent 70%);
+    opacity: .06;
 }
-@keyframes ap {
-    from { border-left-color:var(--danger-500); box-shadow:0 2px 8px rgba(239,68,68,0.07); }
-    to   { border-left-color:var(--danger-400); box-shadow:0 4px 16px rgba(239,68,68,0.16); }
+.mval {
+    font-family: 'Share Tech Mono', monospace; font-size: 1.85rem; font-weight: 700;
+    color: var(--ac); text-shadow: 0 0 15px var(--ac); line-height: 1;
 }
-.alert-warning {
-    display:flex; align-items:center; gap:10px;
-    background:var(--warning-50);
-    border:1px solid rgba(245,158,11,0.2);
-    border-left:3px solid var(--warning-500);
-    border-radius:var(--radius-md);
-    padding:10px 16px; margin:5px 0;
+.mlbl { font-size: .63rem; color: #4a6075; letter-spacing: 1.5px;
+        text-transform: uppercase; margin-top: 4px; }
+.msub { font-size: .68rem; color: #5a7090; margin-top: 2px;
+        font-family: 'Share Tech Mono', monospace; }
+.mdelta {
+    font-family: 'Share Tech Mono', monospace; font-size: .62rem;
+    position: absolute; top: 8px; right: 10px;
 }
-.alert-warning span { font-size:.76rem; font-weight:500; color:var(--warning-600); }
+.mdelta-up { color: #00ff88; }
+.mdelta-dn { color: #ff4b4b; }
 
-/* ── OBJECT TAGS ── */
+/* ── Alert Strip ── */
+.alert-crit {
+    background: linear-gradient(135deg, rgba(255,30,30,.2), rgba(220,60,0,.15));
+    border: 1px solid rgba(255,50,50,.6); border-radius: 7px;
+    padding: 9px 14px; margin: 5px 0;
+    font-family: 'Share Tech Mono', monospace; font-size: .8rem; color: #ff6060;
+    display: flex; align-items: center; gap: 10px;
+    animation: apulse .7s ease infinite alternate;
+}
+.alert-warn {
+    background: rgba(255,196,0,.08); border: 1px solid rgba(255,196,0,.35);
+    border-radius: 7px; padding: 8px 14px; margin: 4px 0;
+    font-family: 'Share Tech Mono', monospace; font-size: .76rem; color: #ffc400;
+}
+.alert-info {
+    background: rgba(0,180,255,.07); border: 1px solid rgba(0,180,255,.25);
+    border-radius: 7px; padding: 7px 12px; margin: 3px 0;
+    font-family: 'Share Tech Mono', monospace; font-size: .73rem; color: #00a8dd;
+}
+@keyframes apulse {
+    from { box-shadow: 0 0 8px rgba(255,40,40,.2); }
+    to   { box-shadow: 0 0 22px rgba(255,40,40,.6); border-color: #ff7070; }
+}
+
+/* ── Object Tags ── */
 .otag {
-    display:inline-flex; align-items:center; gap:5px;
-    padding:4px 12px; border-radius:20px;
-    font-family:'IBM Plex Mono',monospace;
-    font-size:.67rem; font-weight:500;
-    margin:3px; border:1px solid;
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 3px 9px; border-radius: 4px; border: 1px solid;
+    font-family: 'Share Tech Mono', monospace; font-size: .69rem; margin: 2px;
 }
-.t-person  { color:#2563EB; background:#EFF6FF; border-color:rgba(37,99,235,0.2); }
-.t-vehicle { color:#0891B2; background:#ECFEFF; border-color:rgba(8,145,178,0.2); }
-.t-animal  { color:#059669; background:#ECFDF5; border-color:rgba(5,150,105,0.2); }
-.t-object  { color:#D97706; background:#FFFBEB; border-color:rgba(217,119,6,0.2); }
-.t-weapon  { color:#DC2626; background:#FFF1F2; border-color:rgba(220,38,38,0.25); font-weight:600; }
+.t-person  { color:#ff6b6b; border-color:rgba(255,107,107,.4); background:rgba(255,107,107,.08); }
+.t-vehicle { color:#00d4ff; border-color:rgba(0,212,255,.4);   background:rgba(0,212,255,.08); }
+.t-animal  { color:#48ff80; border-color:rgba(72,255,128,.4);  background:rgba(72,255,128,.08); }
+.t-object  { color:#ffc400; border-color:rgba(255,196,0,.4);   background:rgba(255,196,0,.08); }
 
-/* ── BARS ── */
-.cbar-wrap {
-    height:4px; border-radius:4px;
-    background:var(--bg-muted); margin-top:5px; overflow:hidden;
-}
-.cbar { height:4px; border-radius:4px; transition:width .5s cubic-bezier(.4,0,.2,1); }
+/* ── Progress / Confidence bars ── */
+.cbar-wrap { background:rgba(255,255,255,.05); border-radius:2px; height:3px; margin-top:3px; }
+.cbar { height:3px; border-radius:2px; transition: width .4s ease; }
 
-/* ── DET ITEMS ── */
-.det-item {
-    padding:8px 10px; border-radius:var(--radius-sm);
-    background:var(--bg-raised);
-    border:1px solid var(--border-light);
-    margin:5px 0; transition:background .15s;
-}
-.det-item:hover { background:var(--brand-50); border-color:var(--border-mid); }
-.det-row {
-    display:flex; align-items:center; justify-content:space-between;
-    font-family:'IBM Plex Mono',monospace; font-size:.68rem;
-}
-.det-label { color:var(--text-secondary); font-weight:500; }
-.det-conf  { font-weight:600; }
-
-/* ── EVENT LOG ── */
+/* ── Event log ── */
 .log-row {
-    display:flex; gap:10px; align-items:center;
-    padding:8px 12px; border-radius:var(--radius-sm);
-    border-left:3px solid; margin:3px 0;
-    font-family:'IBM Plex Mono',monospace; font-size:.67rem;
-    background:var(--bg-raised);
-    border-top:1px solid var(--border-light);
-    border-right:1px solid var(--border-light);
-    border-bottom:1px solid var(--border-light);
-    transition:background .15s;
+    display: flex; gap: 8px; align-items: center;
+    padding: 5px 9px; border-radius: 5px; border-left: 2px solid;
+    margin: 2px 0; font-family: 'Share Tech Mono', monospace; font-size: .69rem;
+    background: rgba(0,15,35,.5);
 }
-.log-row:hover { background:var(--brand-50); }
-.log-t { color:var(--text-muted); min-width:60px; }
-.log-m { flex:1; color:var(--text-secondary); }
-.log-n { color:var(--brand-600); min-width:28px; text-align:right; font-weight:600; }
-.lc { border-left-color:var(--danger-500); }
-.lw { border-left-color:var(--warning-500); }
-.li { border-left-color:var(--brand-500); }
-.ls { border-left-color:var(--success-500); }
+.log-t { color: #3a5a70; min-width: 62px; }
+.log-m { flex: 1; }
+.log-n { color: #00c8ff; min-width: 28px; text-align: right; }
+.lc { border-color: #ff4b4b; }
+.lw { border-color: #ffc400; }
+.li { border-color: #00c8ff; }
+.ls { border-color: #00ff88; }
 
-/* ── ZONE BADGE ── */
-.zone-badge {
-    display:flex; align-items:center; gap:10px;
-    background:var(--warning-50);
-    border:1px solid rgba(245,158,11,0.2);
-    border-radius:var(--radius-sm);
-    padding:8px 14px; margin:5px 0;
-}
-.zone-dot { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
-.zone-text {
-    font-family:'IBM Plex Mono',monospace;
-    font-size:.7rem; color:var(--warning-600); font-weight:500;
+/* ── Zone box ── */
+.zone-info {
+    background: rgba(255,196,0,.06); border: 1px solid rgba(255,196,0,.25);
+    border-radius: 6px; padding: 8px 12px; margin: 5px 0;
+    font-family: 'Share Tech Mono', monospace; font-size: .72rem; color: #ffc400;
 }
 
-/* ── STAT ITEM ── */
-.stat-item {
-    padding:6px 0;
-    border-bottom:1px solid var(--border-light);
-}
-.stat-item:last-child { border-bottom:none; }
-.stat-row {
-    display:flex; align-items:center; justify-content:space-between;
-    margin-bottom:4px;
-}
-.stat-label {
-    font-size:.71rem; font-weight:500;
-    color:var(--text-secondary);
-    display:flex; align-items:center; gap:6px;
-}
-.stat-count {
-    font-family:'IBM Plex Mono',monospace;
-    font-size:.71rem; font-weight:600;
-}
-
-/* ── FPS STRIP ── */
-.fps-strip {
-    display:flex; gap:6px; align-items:center;
-    padding:6px 10px; margin-top:10px;
-    background:var(--bg-subtle);
-    border:1px solid var(--border-light);
-    border-radius:var(--radius-sm);
-    font-family:'IBM Plex Mono',monospace;
-    font-size:.64rem; color:var(--text-tertiary);
-}
-.fps-chip {
-    background:var(--bg-muted); border-radius:4px;
-    padding:2px 8px; color:var(--brand-600); font-weight:600;
-}
-
-/* ── BUTTONS ── */
+/* ── Buttons ── */
 .stButton button {
-    background:var(--brand-600) !important;
-    color:#fff !important; border:none !important;
-    border-radius:var(--radius-md) !important;
-    font-family:'Plus Jakarta Sans',sans-serif !important;
-    font-size:.76rem !important; font-weight:600 !important;
-    padding:8px 18px !important;
-    box-shadow:0 2px 8px rgba(37,99,235,0.28) !important;
-    transition:all .2s ease !important;
+    background: linear-gradient(135deg,#002850,#004070) !important;
+    color: #00c8ff !important; border: 1px solid rgba(0,180,255,.4) !important;
+    border-radius: 6px !important; font-family: 'Share Tech Mono',monospace !important;
+    font-size: .75rem !important; letter-spacing: 1px !important;
+    transition: all .2s !important; padding: 6px 14px !important;
 }
 .stButton button:hover {
-    background:var(--brand-700) !important;
-    box-shadow:0 6px 16px rgba(37,99,235,0.35) !important;
-    transform:translateY(-1px) !important;
-}
-.stButton button:active { transform:translateY(0) !important; }
-
-/* ── DOWNLOAD BUTTONS ── */
-.stDownloadButton button {
-    background:var(--bg-surface) !important;
-    color:var(--brand-600) !important;
-    border:1.5px solid var(--border-strong) !important;
-    border-radius:var(--radius-md) !important;
-    font-family:'Plus Jakarta Sans',sans-serif !important;
-    font-size:.74rem !important; font-weight:600 !important;
-    box-shadow:var(--shadow-xs) !important;
-    transition:all .2s ease !important;
-}
-.stDownloadButton button:hover {
-    background:var(--brand-50) !important;
-    border-color:var(--brand-400) !important;
-    box-shadow:var(--shadow-md) !important;
-    transform:translateY(-1px) !important;
+    background: linear-gradient(135deg,#003870,#006090) !important;
+    box-shadow: 0 0 16px rgba(0,180,255,.35) !important;
+    border-color: rgba(0,200,255,.7) !important;
 }
 
-/* ── SIDEBAR SECTION HEADER ── */
-.sb-section {
-    font-family:'Plus Jakarta Sans',sans-serif;
-    font-size:.63rem; font-weight:700;
-    color:var(--text-tertiary) !important;
-    letter-spacing:1.5px; text-transform:uppercase;
-    padding:4px 0 2px;
-    display:flex; align-items:center; gap:8px;
-}
-.sb-section::after { content:''; flex:1; height:1px; background:var(--border-light); }
-section[data-testid="stSidebar"] strong {
-    font-family:'Plus Jakarta Sans',sans-serif !important;
-    font-weight:700 !important; font-size:.68rem !important;
-    color:var(--text-tertiary) !important;
-    letter-spacing:1.2px !important; text-transform:uppercase !important;
-}
+/* ── Sidebar widgets ── */
+.stCheckbox label { font-size:.76rem !important; }
+.stSelectbox label, .stRadio label { font-size:.76rem !important; }
+div[data-baseweb="slider"] { margin-top: -6px !important; }
 
-/* ── FORM ELEMENTS ── */
-.stCheckbox label { font-size:.75rem !important; font-weight:500 !important; }
-div[data-baseweb="select"]>div {
-    border-color:var(--border-mid) !important;
-    border-radius:var(--radius-sm) !important;
-    background:var(--bg-surface) !important;
-    box-shadow:var(--shadow-xs) !important;
-}
-.stNumberInput input {
-    border-color:var(--border-mid) !important;
-    border-radius:var(--radius-sm) !important;
-    font-family:'IBM Plex Mono',monospace !important;
-}
-div[data-baseweb="slider"] { margin-top:-4px !important; }
-
-/* ── TABS ── */
-.stTabs [data-baseweb="tab-list"] {
-    background:var(--bg-subtle) !important;
-    border-radius:var(--radius-md) !important;
-    padding:3px !important; gap:2px !important;
-    border:1px solid var(--border-light) !important;
-}
-.stTabs [data-baseweb="tab"] {
-    border-radius:var(--radius-sm) !important;
-    font-family:'Plus Jakarta Sans',sans-serif !important;
-    font-size:.73rem !important; font-weight:500 !important;
-    color:var(--text-tertiary) !important;
-    padding:5px 16px !important;
-}
-.stTabs [aria-selected="true"] {
-    background:var(--bg-surface) !important;
-    color:var(--brand-600) !important;
-    box-shadow:var(--shadow-sm) !important;
-    font-weight:600 !important;
-}
-
-/* ── SCROLLBAR ── */
-::-webkit-scrollbar { width:4px; height:4px; }
-::-webkit-scrollbar-track { background:var(--bg-base); }
-::-webkit-scrollbar-thumb { background:var(--border-strong); border-radius:4px; }
-::-webkit-scrollbar-thumb:hover { background:var(--brand-400); }
-
-hr { border:none !important; border-top:1px solid var(--border-light) !important; margin:10px 0 !important; }
-
-.model-info-box {
-    background:var(--brand-50); border:1px solid var(--border-mid);
-    border-radius:var(--radius-sm); padding:8px 12px;
-    font-family:'IBM Plex Mono',monospace;
-    font-size:.62rem; color:var(--text-tertiary); line-height:1.7; margin:4px 0 6px;
-}
-.model-info-box span { color:var(--brand-600); font-weight:600; }
-.model-warn-box {
-    background:var(--warning-50); border:1px solid rgba(245,158,11,0.25);
-    border-radius:var(--radius-sm); padding:8px 12px; margin-top:5px;
-    font-family:'IBM Plex Mono',monospace;
-    font-size:.62rem; color:var(--warning-600); line-height:1.6;
-}
-.email-info-box {
-    background:var(--brand-50); border:1px solid var(--border-mid);
-    border-radius:var(--radius-sm); padding:9px 12px;
-    font-family:'IBM Plex Mono',monospace;
-    font-size:.62rem; color:var(--text-tertiary); line-height:1.8;
-}
-.email-info-box .key { color:var(--brand-600); font-weight:600; }
-
+/* ── Footer ── */
 .vfooter {
-    text-align:center; padding:.9rem 1rem; margin-top:12px;
-    border-top:1px solid var(--border-light);
-    font-family:'IBM Plex Mono',monospace;
-    font-size:.6rem; letter-spacing:1.5px; color:var(--text-muted);
+    text-align: center; padding: .6rem; margin-top: 8px;
+    color: #1e3050; font-family: 'Share Tech Mono', monospace;
+    font-size: .65rem; letter-spacing: 1.5px;
+    border-top: 1px solid rgba(0,180,255,0.07);
 }
-.vfooter strong { color:var(--text-tertiary); }
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: rgba(0,10,25,1); }
+::-webkit-scrollbar-thumb { background: rgba(0,180,255,.25); border-radius: 2px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(0,180,255,.5); }
+
+hr { border-color: rgba(0,180,255,0.08) !important; margin: 8px 0 !important; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -562,12 +292,18 @@ def init_db():
     con = sqlite3.connect(DB_PATH)
     con.execute("""
         CREATE TABLE IF NOT EXISTS events (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            ts TEXT, level TEXT, category TEXT, label TEXT,
-            message TEXT, conf REAL, cam TEXT
+            id        INTEGER PRIMARY KEY AUTOINCREMENT,
+            ts        TEXT,
+            level     TEXT,
+            category  TEXT,
+            label     TEXT,
+            message   TEXT,
+            conf      REAL,
+            cam       TEXT
         )
     """)
-    con.commit(); con.close()
+    con.commit()
+    con.close()
 
 def db_insert(level, category, label, message, conf=0.0, cam="CAM-01"):
     try:
@@ -576,17 +312,22 @@ def db_insert(level, category, label, message, conf=0.0, cam="CAM-01"):
             "INSERT INTO events (ts,level,category,label,message,conf,cam) VALUES (?,?,?,?,?,?,?)",
             (datetime.datetime.now().isoformat(), level, category, label, message, conf, cam)
         )
-        con.commit(); con.close()
-    except Exception: pass
+        con.commit()
+        con.close()
+    except Exception:
+        pass
 
 def db_fetch_recent(n=100):
     try:
         con = sqlite3.connect(DB_PATH)
         rows = con.execute(
-            "SELECT ts,level,category,label,message,conf,cam FROM events ORDER BY id DESC LIMIT ?", (n,)
+            "SELECT ts,level,category,label,message,conf,cam FROM events ORDER BY id DESC LIMIT ?",
+            (n,)
         ).fetchall()
-        con.close(); return rows
-    except Exception: return []
+        con.close()
+        return rows
+    except Exception:
+        return []
 
 def db_export_csv():
     rows = db_fetch_recent(5000)
@@ -607,59 +348,122 @@ init_db()
 
 # ─────────────────────────── WEBRTC CONFIG ────────────────────────────────────
 def _env(k, d=""):
-    try: return st.secrets.get(k, os.getenv(k, d))
-    except Exception: return os.getenv(k, d)
+    try:
+        return st.secrets.get(k, os.getenv(k, d))
+    except Exception:
+        return os.getenv(k, d)
 
-_turn_urls = [u for u in [_env("TURN_URL_1"),_env("TURN_URL_2"),
-                            _env("TURN_URL_3"),_env("TURN_URL_4")] if u.strip()]
-_tu = _env("TURN_USERNAME"); _tp = _env("TURN_PASSWORD")
+_turn_urls = [u for u in [_env("TURN_URL_1"), _env("TURN_URL_2"),
+                            _env("TURN_URL_3"), _env("TURN_URL_4")] if u.strip()]
+_tu = _env("TURN_USERNAME")
+_tp = _env("TURN_PASSWORD")
 
 if _turn_urls and _tu and _tp:
-    _ice = [{"urls":["stun:stun.relay.metered.ca:80"]},
-            {"urls":_turn_urls,"username":_tu,"credential":_tp}]
+    _ice = [
+        {"urls": ["stun:stun.relay.metered.ca:80"]},
+        {"urls": _turn_urls, "username": _tu, "credential": _tp},
+    ]
 else:
-    _ice = [{"urls":["stun:stun.l.google.com:19302"]},
-            {"urls":["stun:stun1.l.google.com:19302"]},
-            {"urls":["turn:openrelay.metered.ca:80",
-                     "turn:openrelay.metered.ca:443",
-                     "turn:openrelay.metered.ca:443?transport=tcp"],
-             "username":"openrelayproject","credential":"openrelayproject"}]
+    _ice = [
+        {"urls": ["stun:stun.l.google.com:19302"]},
+        {"urls": ["stun:stun1.l.google.com:19302"]},
+        {"urls": ["turn:openrelay.metered.ca:80",
+                  "turn:openrelay.metered.ca:443",
+                  "turn:openrelay.metered.ca:443?transport=tcp"],
+         "username": "openrelayproject", "credential": "openrelayproject"},
+    ]
 
 _rtc_cfg_dict = {"iceServers": _ice}
-if _env("FORCE_TURN","false").lower()=="true":
+if _env("FORCE_TURN", "false").lower() == "true":
     _rtc_cfg_dict["iceTransportPolicy"] = "relay"
+
 RTC_CONFIG = RTCConfiguration(_rtc_cfg_dict)
 
 
 # ─────────────────────────── YOLO MODEL ──────────────────────────────────────
 @st.cache_resource
 def load_model(weights: str = "yolov8n.pt"):
+    from pathlib import Path
     if not Path(weights).exists() and weights not in ["yolov8n.pt","yolov8s.pt","yolov8m.pt"]:
-        return None
+        return None   # model file missing — handled gracefully in UI
     return YOLO(weights)
 
+# ── Model registry ─────────────────────────────────────────────────────────
+# "is_weapon_model" = True  →  every class the model detects is treated as WEAPON
+# "file"           = filename to look for in the project folder
 MODEL_OPTIONS = {
-    "YOLOv8n · General (fastest)":  {"file":"yolov8n.pt","is_weapon_model":False,"desc":"80 COCO classes · people, cars, animals…"},
-    "YOLOv8s · General (balanced)": {"file":"yolov8s.pt","is_weapon_model":False,"desc":"80 COCO classes · better accuracy"},
-    "YOLOv8m · General (accurate)": {"file":"yolov8m.pt","is_weapon_model":False,"desc":"80 COCO classes · highest accuracy"},
-    "🔫 WeaponV1 · 14 Classes":     {"file":"weapon_v1.pt","is_weapon_model":True,"desc":"AK47 · Rifle · Revolver · Shotgun · Knife · Axe · Sword · M16…"},
-    "🔫 WeaponV2 · 5 Classes":      {"file":"weapon_v2.pt","is_weapon_model":True,"desc":"Pistol · Rifle · Knife · Grenade · Missile"},
-    "🔫 WeaponV3 · Gun+Knife":      {"file":"weapon_v3.pt","is_weapon_model":True,"desc":"Handgun · Shotgun · Knife · Rifle"},
+    # ── Standard COCO models ──────────────────────────────────────────────
+    "YOLOv8n · General (fastest)":  {
+        "file": "yolov8n.pt", "is_weapon_model": False,
+        "desc": "80 COCO classes · people, cars, animals…"
+    },
+    "YOLOv8s · General (balanced)": {
+        "file": "yolov8s.pt", "is_weapon_model": False,
+        "desc": "80 COCO classes · better accuracy"
+    },
+    "YOLOv8m · General (accurate)": {
+        "file": "yolov8m.pt", "is_weapon_model": False,
+        "desc": "80 COCO classes · highest accuracy"
+    },
+    # ── Custom Weapon models (place .pt files in DeepWatch/ folder) ───────
+    "🔫 WeaponV1 · 14 Classes":     {
+        "file": "weapon_v1.pt", "is_weapon_model": True,
+        "desc": "AK47 · Rifle · Revolver · Shotgun · Knife · Axe · Sword · M16…"
+    },
+    "🔫 WeaponV2 · 5 Classes":      {
+        "file": "weapon_v2.pt", "is_weapon_model": True,
+        "desc": "Pistol · Rifle · Knife · Grenade · Missile"
+    },
+    "🔫 WeaponV3 · Gun+Knife":      {
+        "file": "weapon_v3.pt", "is_weapon_model": True,
+        "desc": "Handgun · Shotgun · Knife · Rifle"
+    },
 }
-WEAPON_KEYWORDS = {"gun","pistol","rifle","revolver","shotgun","ak47","m16","firearm",
-    "weapon","knife","sword","axe","grenade","missile","handgun","sniper",
-    "carbine","uzi","glock","assault","explosive","bomb","blade"}
-PERSON_IDS  = {0}
-VEHICLE_IDS = {1,2,3,5,7}
-ANIMAL_IDS  = set(range(14,24))
-WEAPON_IDS  = {76,43}
-CAT_BGR = {"person":(80,80,255),"vehicle":(255,200,0),"animal":(80,255,128),"object":(0,200,255),"weapon":(0,0,255)}
-CAT_HEX = {"person":"#2563EB","vehicle":"#0891B2","animal":"#059669","object":"#D97706","weapon":"#DC2626"}
-CAT_ICON= {"person":"👤","vehicle":"🚗","animal":"🐾","object":"📦","weapon":"⚠️"}
 
-def get_category(cid,label="",is_weapon_model=False):
-    if is_weapon_model: return "weapon"
-    if label.lower() in WEAPON_KEYWORDS: return "weapon"
+# ── Weapon keyword matcher (for custom model label names) ─────────────────
+WEAPON_KEYWORDS = {
+    "gun","pistol","rifle","revolver","shotgun","ak47","m16","firearm",
+    "weapon","knife","sword","axe","grenade","missile","handgun","sniper",
+    "carbine","uzi","glock","assault","explosive","bomb","blade",
+}
+
+# ── COCO class mappings (used only for general models) ────────────────────
+PERSON_IDS  = {0}
+VEHICLE_IDS = {1, 2, 3, 5, 7}
+ANIMAL_IDS  = set(range(14, 24))
+WEAPON_IDS  = {76, 43}                  # scissors, knife in COCO
+
+CAT_BGR  = {
+    "person":  (80,  80,  255),
+    "vehicle": (255, 200, 0),
+    "animal":  (80,  255, 128),
+    "object":  (0,   200, 255),
+    "weapon":  (0,   0,   255),
+}
+CAT_HEX  = {
+    "person":  "#ff6b6b",
+    "vehicle": "#00d4ff",
+    "animal":  "#48ff80",
+    "object":  "#ffc400",
+    "weapon":  "#ff3030",
+}
+CAT_ICON = {
+    "person":  "👤",
+    "vehicle": "🚗",
+    "animal":  "🐾",
+    "object":  "📦",
+    "weapon":  "⚠️",
+}
+
+def get_category(cid: int, label: str = "", is_weapon_model: bool = False) -> str:
+    """Smart category detection — handles both COCO and custom weapon models."""
+    # If this is a dedicated weapon model → everything is a weapon
+    if is_weapon_model:
+        return "weapon"
+    # Check label name for weapon keywords (catches edge cases)
+    if label.lower() in WEAPON_KEYWORDS:
+        return "weapon"
+    # Standard COCO ID checks
     if cid in PERSON_IDS:  return "person"
     if cid in VEHICLE_IDS: return "vehicle"
     if cid in ANIMAL_IDS:  return "animal"
@@ -668,122 +472,172 @@ def get_category(cid,label="",is_weapon_model=False):
 
 
 # ─────────────────────────── EMAIL HELPER ────────────────────────────────────
-def send_email_alert(subject, body, img_bytes=None):
-    smtp_host = _env("SMTP_HOST","smtp.gmail.com")
-    smtp_port = int(_env("SMTP_PORT","587"))
-    smtp_user = _env("SMTP_USER","")
-    smtp_pass = _env("SMTP_PASS","")
-    smtp_to   = _env("SMTP_TO", smtp_user)
+def send_email_alert(subject: str, body: str, img_bytes: bytes = None) -> tuple[bool, str]:
+    smtp_host = _env("SMTP_HOST", "smtp.gmail.com")
+    smtp_port = int(_env("SMTP_PORT", "587"))
+    smtp_user = _env("SMTP_USER", "")
+    smtp_pass = _env("SMTP_PASS", "")
+    smtp_to   = _env("SMTP_TO",   smtp_user)
+
     if not smtp_user or not smtp_pass:
-        return False,"SMTP credentials not configured"
+        return False, "SMTP credentials not configured"
+
     try:
         msg = MIMEMultipart()
         msg["From"]    = smtp_user
         msg["To"]      = smtp_to
         msg["Subject"] = f"[DeepWatch 🚨] {subject}"
-        msg.attach(MIMEText(
-            f"{body}\n\n────────────────────────────\n"
-            f"DeepWatch v2.0 Enterprise | {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
-            f"This is an automated security alert.\n","plain"))
+        body_full = (
+            f"{body}\n\n"
+            f"────────────────────────────\n"
+            f"DeepWatch v1.0 | {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
+            f"This is an automated security alert.\n"
+        )
+        msg.attach(MIMEText(body_full, "plain"))
         if img_bytes:
             att = MIMEImage(img_bytes, name="deepwatch_alert.jpg")
-            att.add_header("Content-Disposition","attachment",filename="deepwatch_alert.jpg")
+            att.add_header("Content-Disposition", "attachment", filename="deepwatch_alert.jpg")
             msg.attach(att)
-        with smtplib.SMTP(smtp_host,smtp_port,timeout=10) as srv:
-            srv.starttls(); srv.login(smtp_user,smtp_pass); srv.send_message(msg)
-        return True,"OK"
+        with smtplib.SMTP(smtp_host, smtp_port, timeout=10) as srv:
+            srv.starttls()
+            srv.login(smtp_user, smtp_pass)
+            srv.send_message(msg)
+        return True, "OK"
     except Exception as exc:
-        return False,str(exc)
+        return False, str(exc)
 
 
 # ─────────────────────── SESSION STATE INIT ──────────────────────────────────
-_defaults = {
-    "total_detections":0,"people_count":0,"vehicle_count":0,
-    "alert_count":0,"snap_count":0,"email_count":0,
-    "label_counts":defaultdict(int),"event_log":deque(maxlen=300),
-    "snapshots":deque(maxlen=12),"heatmap":None,"loiter_times":{},
-    "start_time":time.time(),"last_alert_time":0.0,
-    "last_snap_time":0.0,"last_weapon_alert":0.0,
-    "alert_cats":{"person"},"snap_cats":{"person"},
-    "boundary_zones":[],"loiter_threshold":8,
-    "model_key":"YOLOv8n · General (fastest)",
+_defaults: dict = {
+    # counters
+    "total_detections":  0,
+    "people_count":      0,
+    "vehicle_count":     0,
+    "alert_count":       0,
+    "snap_count":        0,
+    "email_count":       0,
+    # per-label counts
+    "label_counts":      defaultdict(int),
+    # in-memory log (last 300)
+    "event_log":         deque(maxlen=300),
+    # snapshots (last 12)
+    "snapshots":         deque(maxlen=12),
+    # heatmap accumulator (updated by processor)
+    "heatmap":           None,
+    # loitering: track_id → entry_time
+    "loiter_times":      {},
+    # timing
+    "start_time":        time.time(),
+    "last_alert_time":   0.0,
+    "last_snap_time":    0.0,
+    "last_weapon_alert": 0.0,
+    # config (overwritten by sidebar)
+    "alert_cats":        {"person"},
+    "snap_cats":         {"person"},
+    "boundary_zones":    [],     # list of (y_pct, label, color_hex)
+    "loiter_threshold":  8,
+    "model_key":         "YOLOv8n (fastest)",
 }
-for k,v in _defaults.items():
-    if k not in st.session_state: st.session_state[k] = v
+for k, v in _defaults.items():
+    if k not in st.session_state:
+        st.session_state[k] = v
 
 
 # ──────────────────────────── SIDEBAR ─────────────────────────────────────────
 with st.sidebar:
-    st.markdown("""
-    <div style="padding:14px 4px 10px;display:flex;align-items:center;gap:10px">
-      <div style="width:28px;height:28px;border-radius:7px;
-                  background:linear-gradient(135deg,#2563EB,#60A5FA);
-                  display:flex;align-items:center;justify-content:center;
-                  font-size:.75rem;box-shadow:0 3px 8px rgba(37,99,235,0.25)">🛡️</div>
-      <div>
-        <div style="font-family:'Plus Jakarta Sans',sans-serif;font-size:.82rem;
-                    font-weight:700;color:#0F1729;letter-spacing:.3px">Control Panel</div>
-        <div style="font-family:'IBM Plex Mono',monospace;font-size:.57rem;
-                    color:#A8B4CC;letter-spacing:1.2px">DEEPWATCH ENTERPRISE</div>
-      </div>
-    </div>
-    """, unsafe_allow_html=True)
+    st.markdown(
+        '<div style="font-family:\'Share Tech Mono\',monospace;color:#00c8ff;'
+        'letter-spacing:3px;font-size:.85rem;padding:6px 0 2px">⚙  CONTROL PANEL</div>',
+        unsafe_allow_html=True
+    )
     st.markdown("---")
 
-    st.markdown('<div class="sb-section">📷 Camera</div>', unsafe_allow_html=True)
-    camera_facing = st.selectbox("Feed",["Back (Rear)","Front (Selfie)"],index=0,label_visibility="collapsed")
-    model_key = st.selectbox("Detection Model",list(MODEL_OPTIONS.keys()),index=0)
+    # ── Camera ──
+    st.markdown("**📷 Camera**")
+    camera_facing = st.selectbox("Feed", ["Back (Rear)", "Front (Selfie)"], index=0,
+                                  label_visibility="collapsed")
+    model_key = st.selectbox("Model", list(MODEL_OPTIONS.keys()), index=0)
     st.session_state.model_key = model_key
 
-    _minfo = MODEL_OPTIONS[model_key]; _is_weapon = _minfo["is_weapon_model"]
+    # Show model description
+    _minfo = MODEL_OPTIONS[model_key]
     st.markdown(
-        f'<div class="model-info-box"><span>{"⚠ WEAPON MODEL" if _is_weapon else "◉ GENERAL MODEL"}</span><br>{_minfo["desc"]}</div>',
-        unsafe_allow_html=True)
+        f'<div style="background:rgba(0,180,255,.06);border:1px solid rgba(0,180,255,.15);'
+        f'border-radius:5px;padding:6px 10px;font-family:\'Share Tech Mono\',monospace;'
+        f'font-size:.63rem;color:#4a7090;line-height:1.5">'
+        f'{"⚠️ WEAPON MODEL" if _minfo["is_weapon_model"] else "🌐 GENERAL MODEL"}<br>'
+        f'{_minfo["desc"]}</div>',
+        unsafe_allow_html=True
+    )
 
+    # Check if weapon model file exists
     _model_file = _minfo["file"]
-    _model_missing = (_is_weapon and not Path(_model_file).exists())
+    _model_missing = (_minfo["is_weapon_model"] and not Path(_model_file).exists())
     if _model_missing:
-        st.markdown(f'<div class="model-warn-box">⚠ File not found: <b>{_model_file}</b><br>Falling back to YOLOv8n</div>',unsafe_allow_html=True)
+        st.markdown(
+            f'<div style="background:rgba(255,100,0,.1);border:1px solid rgba(255,100,0,.4);'
+            f'border-radius:5px;padding:6px 10px;font-family:\'Share Tech Mono\',monospace;'
+            f'font-size:.63rem;color:#ff8040;margin-top:4px">'
+            f'⚠️ FILE NOT FOUND: <b>{_model_file}</b> — place in DeepWatch/ folder<br>'
+            f'Falling back to YOLOv8n general model</div>',
+            unsafe_allow_html=True
+        )
         model_obj = load_model("yolov8n.pt")
     else:
         model_obj = load_model(_model_file)
-    IS_WEAPON_MODEL = _is_weapon and not _model_missing
 
-    conf_thresh = st.slider("Confidence Threshold",0.20,0.90,0.45,0.05,format="%.2f")
-    max_det     = st.slider("Max Detections / Frame",5,50,20,5)
+    IS_WEAPON_MODEL = _minfo["is_weapon_model"] and not _model_missing
+
+    conf_thresh = st.slider("Detection Confidence", 0.20, 0.90, 0.45, 0.05,
+                             format="%.2f")
+    max_det = st.slider("Max Detections / Frame", 5, 50, 20, 5)
+
     st.markdown("---")
 
-    st.markdown('<div class="sb-section">🕐 Operation Mode</div>', unsafe_allow_html=True)
-    op_mode = st.radio("Mode",["Always On","Vacation (24/7)","Scheduled"],label_visibility="collapsed")
+    # ── Operation mode ──
+    st.markdown("**🕐 Operation Mode**")
+    op_mode = st.radio("Mode", ["Always On", "Vacation (24/7)", "Scheduled"],
+                        label_visibility="collapsed")
     active_now = True
     if op_mode == "Scheduled":
-        c1,c2 = st.columns(2)
-        with c1: t_start = st.time_input("Start",datetime.time(22,0))
-        with c2: t_end   = st.time_input("End",datetime.time(6,0))
+        col1, col2 = st.columns(2)
+        with col1:
+            t_start = st.time_input("Start", datetime.time(22, 0))
+        with col2:
+            t_end   = st.time_input("End",   datetime.time(6, 0))
         now_t = datetime.datetime.now().time()
-        active_now = (t_start<=now_t<=t_end) if t_start<t_end else (now_t>=t_start or now_t<=t_end)
+        if t_start < t_end:
+            active_now = t_start <= now_t <= t_end
+        else:
+            active_now = now_t >= t_start or now_t <= t_end
+
     st.markdown("---")
 
-    st.markdown('<div class="sb-section">🚧 Boundary Zones</div>', unsafe_allow_html=True)
-    bz_count = st.number_input("Number of zones",0,4,1,1)
+    # ── Boundary Zones ──
+    st.markdown("**🚧 Boundary Zones**")
+    bz_count = st.number_input("Number of zones", 0, 4, 1, 1)
     boundary_zones = []
-    zone_colors = ["#F59E0B","#EF4444","#059669","#2563EB"]
-    zone_names  = ["ZONE-A","ZONE-B","ZONE-C","ZONE-D"]
+    zone_colors = ["#ffc400", "#ff4b4b", "#00ff88", "#00c8ff"]
+    zone_names  = ["ZONE-A", "ZONE-B", "ZONE-C", "ZONE-D"]
     for i in range(int(bz_count)):
-        y_pct = st.slider(f"{zone_names[i]} height (%)",0,100,65-i*15,5,key=f"zone_{i}")
-        boundary_zones.append((y_pct,zone_names[i],zone_colors[i]))
+        y_pct = st.slider(f"{zone_names[i]} height (%)", 0, 100, 65 - i*15, 5,
+                           key=f"zone_{i}")
+        boundary_zones.append((y_pct, zone_names[i], zone_colors[i]))
     st.session_state.boundary_zones = boundary_zones
+
     st.markdown("---")
 
-    st.markdown('<div class="sb-section">🚨 Alert Triggers</div>', unsafe_allow_html=True)
-    ac_person  = st.checkbox("Person",         value=True,  key="ac_p")
-    ac_vehicle = st.checkbox("Vehicle",        value=False, key="ac_v")
-    ac_animal  = st.checkbox("Animal",         value=False, key="ac_a")
-    ac_object  = st.checkbox("Object",         value=False, key="ac_o")
-    ac_weapon  = st.checkbox("Weapon ⚠",       value=True,  key="ac_w")
-    ac_loiter  = st.checkbox("Loitering",      value=True,  key="ac_l")
-    ac_crowd   = st.checkbox("Crowd (>N)",     value=False, key="ac_cr")
-    crowd_n    = st.slider("Crowd threshold",2,20,5,1) if ac_crowd else 5
+    # ── Alert triggers ──
+    st.markdown("**🚨 Alert Triggers**")
+    ac_person  = st.checkbox("Person",  value=True,  key="ac_p")
+    ac_vehicle = st.checkbox("Vehicle", value=False, key="ac_v")
+    ac_animal  = st.checkbox("Animal",  value=False, key="ac_a")
+    ac_object  = st.checkbox("Object",  value=False, key="ac_o")
+    ac_weapon  = st.checkbox("Weapon ⚠", value=True, key="ac_w")
+    ac_loiter  = st.checkbox("Loitering", value=True, key="ac_l")
+    ac_crowd   = st.checkbox("Crowd (>N people)", value=False, key="ac_cr")
+    crowd_n    = st.slider("Crowd threshold", 2, 20, 5, 1) if ac_crowd else 5
+
     alert_cats = set()
     if ac_person:  alert_cats.add("person")
     if ac_vehicle: alert_cats.add("vehicle")
@@ -791,15 +645,20 @@ with st.sidebar:
     if ac_object:  alert_cats.add("object")
     if ac_weapon:  alert_cats.add("weapon")
     st.session_state.alert_cats = alert_cats
-    alert_cooldown = st.slider("Alert cooldown (s)",5,120,30,5)
+
+    alert_cooldown = st.slider("Alert cooldown (s)", 5, 120, 30, 5)
+
     st.markdown("---")
 
-    st.markdown('<div class="sb-section">⏳ Loitering</div>', unsafe_allow_html=True)
-    loiter_thresh = st.slider("Loiter threshold (s)",3,60,8,1)
+    # ── Loitering ──
+    st.markdown("**⏳ Loitering Detection**")
+    loiter_thresh = st.slider("Loiter threshold (s)", 3, 60, 8, 1)
     st.session_state.loiter_threshold = loiter_thresh
+
     st.markdown("---")
 
-    st.markdown('<div class="sb-section">📸 Auto Snapshot</div>', unsafe_allow_html=True)
+    # ── Snapshot ──
+    st.markdown("**📸 Auto Snapshot**")
     sc_person  = st.checkbox("On person",  value=True,  key="sc_p")
     sc_vehicle = st.checkbox("On vehicle", value=False, key="sc_v")
     sc_animal  = st.checkbox("On animal",  value=False, key="sc_a")
@@ -810,600 +669,800 @@ with st.sidebar:
     if sc_animal:  snap_cats.add("animal")
     if sc_weapon:  snap_cats.add("weapon")
     st.session_state.snap_cats = snap_cats
-    snap_cooldown = st.slider("Snap cooldown (s)",2,60,10,2)
+    snap_cooldown = st.slider("Snap cooldown (s)", 2, 60, 10, 2)
+
     st.markdown("---")
 
-    st.markdown('<div class="sb-section">📧 Email Alerts</div>', unsafe_allow_html=True)
-    email_enabled = st.checkbox("Enable email alerts",value=False)
+    # ── Email ──
+    st.markdown("**📧 Email Alerts**")
+    email_enabled = st.checkbox("Enable email alerts", value=False)
     if email_enabled:
-        st.markdown('<div class="email-info-box">Configure in Streamlit Secrets:<br>'
-            '<span class="key">SMTP_USER · SMTP_PASS · SMTP_TO</span><br>'
-            'Optional: SMTP_HOST · SMTP_PORT<br>Gmail: use an App Password</div>',
-            unsafe_allow_html=True)
+        st.markdown(
+            '<div style="background:rgba(0,180,255,.06);border:1px solid rgba(0,180,255,.2);'
+            'border-radius:5px;padding:7px 10px;font-family:\'Share Tech Mono\',monospace;'
+            'font-size:.65rem;color:#456;line-height:1.6">'
+            'Set in Streamlit Secrets:<br>'
+            '<span style="color:#00c8ff">SMTP_USER SMTP_PASS SMTP_TO</span><br>'
+            'Optional: SMTP_HOST SMTP_PORT<br>'
+            'Gmail → use App Password</div>',
+            unsafe_allow_html=True
+        )
+
     st.markdown("---")
 
-    st.markdown('<div class="sb-section">🎨 Overlay</div>', unsafe_allow_html=True)
+    # ── Overlay options ──
+    st.markdown("**🎨 Overlay Options**")
     show_heatmap   = st.checkbox("Show Heatmap",         value=False)
     show_tracks    = st.checkbox("Show Tracking Trails", value=True)
     show_crowd_map = st.checkbox("Show Crowd Density",   value=False)
     show_fps_hud   = st.checkbox("Show HUD Overlay",     value=True)
-    draw_style     = st.radio("Box Style",["Corners","Full Box","Dot"],label_visibility="collapsed",horizontal=True)
+    draw_style     = st.radio("Box Style", ["Corners", "Full Box", "Dot"],
+                               label_visibility="collapsed", horizontal=True)
+
     st.markdown("---")
 
-    st.markdown('<div class="sb-section">💾 Export</div>', unsafe_allow_html=True)
-    ca,cb = st.columns(2)
-    with ca: st.download_button("📥 CSV", data=db_export_csv(),file_name="deepwatch_log.csv",mime="text/csv",use_container_width=True)
-    with cb: st.download_button("📥 JSON",data=db_export_json(),file_name="deepwatch_log.json",mime="application/json",use_container_width=True)
+    # ── Data export ──
+    st.markdown("**💾 Export Data**")
+    col_a, col_b = st.columns(2)
+    with col_a:
+        st.download_button("📥 CSV", data=db_export_csv(),
+                            file_name="deepwatch_log.csv", mime="text/csv",
+                            use_container_width=True)
+    with col_b:
+        st.download_button("📥 JSON", data=db_export_json(),
+                            file_name="deepwatch_log.json", mime="application/json",
+                            use_container_width=True)
+
     st.markdown("---")
-    if st.button("↺ Clear Session Data",use_container_width=True):
-        for k,v in _defaults.items():
-            st.session_state[k]=(v() if callable(v) else v.copy() if isinstance(v,(dict,deque)) else v)
+    if st.button("🗑️ CLEAR SESSION DATA", use_container_width=True):
+        for k, v in _defaults.items():
+            st.session_state[k] = (v() if callable(v) else
+                                   v.copy() if isinstance(v, (dict, deque)) else v)
         st.rerun()
 
 
+# Global flag — overwritten by sidebar after model selection
 IS_WEAPON_MODEL = False
 
 # ─────────────────────────── VIDEO PROCESSOR ──────────────────────────────────
 class AdvancedVideoProcessor(VideoProcessorBase):
-    def __init__(self):
-        self._lock=threading.Lock(); self.detections=[]; self.fps=0
-        self.frame_count=0; self.last_frame=None; self._t=time.time()
-        self._trackers={}; self._next_id=0; self._heatmap=None
-        self._heatmap_decay=0.995
-        self._trails=defaultdict(lambda: deque(maxlen=30))
-        self._h=self._w=0
+    """
+    Thread-safe video processor with:
+    - YOLOv8 inference (every 2nd frame for performance)
+    - Simple centroid tracker for person counting and loitering
+    - Heatmap accumulation
+    - Configurable drawing styles
+    - Full HUD overlay
+    """
 
-    def _update_tracker(self,new_centers):
-        MATCH_DIST=80; assigned={}; free_ids=list(self._trackers.keys())
-        for cx,cy,cat in new_centers:
-            best_id,best_d=None,MATCH_DIST+1
+    def __init__(self):
+        self._lock       = threading.Lock()
+        self.detections  : list  = []
+        self.fps         : int   = 0
+        self.frame_count : int   = 0
+        self.last_frame          = None
+        self._t                  = time.time()
+        # Centroid tracker: track_id → {"center":..., "age":..., "entry":...}
+        self._trackers   : dict  = {}
+        self._next_id    : int   = 0
+        # Heatmap
+        self._heatmap            = None
+        self._heatmap_decay      = 0.995
+        # Trails: track_id → deque of centers
+        self._trails     : dict  = defaultdict(lambda: deque(maxlen=30))
+        # Frame dimensions
+        self._h = self._w = 0
+
+    # ── centroid tracker ──────────────────────────────────────────────────────
+    def _update_tracker(self, new_centers: list[tuple[int,int,str]]) -> dict:
+        """Returns map of track_id → (cx,cy,category,entry_time)"""
+        MATCH_DIST = 80
+        assigned = {}
+        free_ids = list(self._trackers.keys())
+
+        for cx, cy, cat in new_centers:
+            best_id, best_d = None, MATCH_DIST + 1
             for tid in free_ids:
-                tx,ty=self._trackers[tid]["center"]
-                d=math.hypot(cx-tx,cy-ty)
-                if d<best_d: best_d,best_id=d,tid
+                tx, ty = self._trackers[tid]["center"]
+                d = math.hypot(cx - tx, cy - ty)
+                if d < best_d:
+                    best_d, best_id = d, tid
             if best_id is not None:
-                self._trackers[best_id].update({"center":(cx,cy),"age":0})
-                assigned[best_id]=(cx,cy,cat,self._trackers[best_id]["entry"])
+                self._trackers[best_id].update({"center": (cx, cy), "age": 0})
+                assigned[best_id] = (cx, cy, cat, self._trackers[best_id]["entry"])
                 free_ids.remove(best_id)
             else:
-                tid=self._next_id; self._next_id+=1
-                self._trackers[tid]={"center":(cx,cy),"age":0,"entry":time.time(),"cat":cat}
-                assigned[tid]=(cx,cy,cat,self._trackers[tid]["entry"])
+                tid = self._next_id; self._next_id += 1
+                self._trackers[tid] = {"center": (cx, cy), "age": 0,
+                                       "entry": time.time(), "cat": cat}
+                assigned[tid] = (cx, cy, cat, self._trackers[tid]["entry"])
+
+        # Age out missing tracks
         for tid in list(self._trackers.keys()):
             if tid not in assigned:
-                self._trackers[tid]["age"]+=1
-                if self._trackers[tid]["age"]>15:
+                self._trackers[tid]["age"] += 1
+                if self._trackers[tid]["age"] > 15:
                     del self._trackers[tid]
-                    if tid in self._trails: del self._trails[tid]
+                    if tid in self._trails:
+                        del self._trails[tid]
+
         return assigned
 
-    def _draw_box(self,img,x1,y1,x2,y2,color,label,style):
-        if style=="Corners":
-            blen=min(14,(x2-x1)//3,(y2-y1)//3)
+    # ── draw bounding box ────────────────────────────────────────────────────
+    def _draw_box(self, img, x1, y1, x2, y2, color, label, style):
+        if style == "Corners":
+            blen = min(14, (x2-x1)//3, (y2-y1)//3)
             for px,py,dx,dy in [(x1,y1,1,1),(x2,y1,-1,1),(x1,y2,1,-1),(x2,y2,-1,-1)]:
                 cv2.line(img,(px,py),(px+dx*blen,py),color,2)
                 cv2.line(img,(px,py),(px,py+dy*blen),color,2)
-        elif style=="Full Box":
+        elif style == "Full Box":
             cv2.rectangle(img,(x1,y1),(x2,y2),color,1)
-        else:
-            cx,cy=(x1+x2)//2,(y1+y2)//2
-            cv2.circle(img,(cx,cy),6,color,-1); cv2.circle(img,(cx,cy),8,color,1)
-        (tw,th),_=cv2.getTextSize(label,cv2.FONT_HERSHEY_SIMPLEX,.4,1)
+        else:  # Dot
+            cx,cy = (x1+x2)//2,(y1+y2)//2
+            cv2.circle(img,(cx,cy),6,color,-1)
+            cv2.circle(img,(cx,cy),8,color,1)
+
+        # label background
+        (tw,th),_ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, .4, 1)
         cv2.rectangle(img,(x1,y1-th-8),(x1+tw+8,y1),color,-1)
-        cv2.putText(img,label,(x1+4,y1-4),cv2.FONT_HERSHEY_SIMPLEX,.4,(255,255,255),1,cv2.LINE_AA)
+        cv2.putText(img, label, (x1+4,y1-4),
+                    cv2.FONT_HERSHEY_SIMPLEX, .4, (0,0,0), 1, cv2.LINE_AA)
 
-    def recv(self,frame:av.VideoFrame)->av.VideoFrame:
-        img=frame.to_ndarray(format="bgr24")
-        self.frame_count+=1
-        now=time.time(); self.fps=round(1.0/max(now-self._t,1e-6)); self._t=now
-        h,w=img.shape[:2]
-        if w>640:
-            scale=640/w; img=cv2.resize(img,(640,int(h*scale)))
-        self._h,self._w=img.shape[:2]
-        if self._heatmap is None or self._heatmap.shape[:2]!=img.shape[:2]:
-            self._heatmap=np.zeros((self._h,self._w),dtype=np.float32)
+    # ── main recv ────────────────────────────────────────────────────────────
+    def recv(self, frame: av.VideoFrame) -> av.VideoFrame:
+        img = frame.to_ndarray(format="bgr24")
+        self.frame_count += 1
+        now = time.time()
+        elapsed = max(now - self._t, 1e-6)
+        self.fps = round(1.0 / elapsed)
+        self._t  = now
 
-        if self.frame_count%2==0:
-            results=model_obj(img,conf=conf_thresh,max_det=max_det,verbose=False)[0]
-            new_dets=[]
+        # Resize for performance
+        h, w = img.shape[:2]
+        target_w = 640
+        if w > target_w:
+            scale = target_w / w
+            img   = cv2.resize(img, (target_w, int(h * scale)))
+        self._h, self._w = img.shape[:2]
+
+        # Init heatmap
+        if self._heatmap is None or self._heatmap.shape[:2] != img.shape[:2]:
+            self._heatmap = np.zeros((self._h, self._w), dtype=np.float32)
+
+        # ── Inference (every 2nd frame) ───────────────────────────────────
+        if self.frame_count % 2 == 0:
+            results = model_obj(img, conf=conf_thresh,
+                                max_det=max_det, verbose=False)[0]
+            new_dets = []
             for box in results.boxes:
-                cid=int(box.cls[0]); conf=float(box.conf[0])
-                lbl=model_obj.names[cid]; cat=get_category(cid,lbl,IS_WEAPON_MODEL)
-                x1,y1,x2,y2=map(int,box.xyxy[0])
-                new_dets.append({"label":lbl,"conf":conf,"category":cat,
-                                  "box":(x1,y1,x2,y2),"cx":(x1+x2)//2,"cy":(y1+y2)//2})
-            with self._lock: self.detections=new_dets
-
-        with self._lock: dets=list(self.detections)
-
-        self._heatmap*=self._heatmap_decay
-        for d in dets:
-            if d["category"]=="person":
-                cx,cy=d["cx"],d["cy"]; r=30
-                self._heatmap[max(0,cy-r):min(self._h,cy+r),max(0,cx-r):min(self._w,cx+r)]+=0.15
-
-        person_centers=[(d["cx"],d["cy"],d["category"]) for d in dets if d["category"]=="person"]
-        track_map=self._update_tracker(person_centers)
-        for tid,(cx,cy,_,_) in track_map.items():
-            self._trails[tid].appendleft((cx,cy))
-
-        if show_heatmap:
-            hm_u8=(np.clip(self._heatmap,0,1)*255).astype(np.uint8)
-            hm_col=cv2.applyColorMap(hm_u8,cv2.COLORMAP_JET)
-            mask=hm_u8>10; img[mask]=cv2.addWeighted(img,0.5,hm_col,0.5,0)[mask]
-
-        zone_breach_labels=[]
-        for (y_pct,z_label,z_hex) in st.session_state.get("boundary_zones",[]):
-            ly=int(self._h*(y_pct/100))
-            z_bgr=tuple(int(z_hex.lstrip("#")[i:i+2],16) for i in (4,2,0))
-            x=0
-            while x<self._w:
-                cv2.line(img,(x,ly),(min(x+20,self._w),ly),z_bgr,2); x+=30
-            cv2.putText(img,f"▶ {z_label}",(8,ly-7),cv2.FONT_HERSHEY_SIMPLEX,.42,z_bgr,1,cv2.LINE_AA)
-            for d in dets:
-                if d["category"]=="person" and d["cy"]>ly:
-                    zone_breach_labels.append(f"{z_label} BREACH")
-
-        if show_tracks:
-            for tid,trail in self._trails.items():
-                pts=list(trail)
-                for i in range(1,len(pts)):
-                    alpha=1.0-i/len(pts)
-                    cv2.line(img,pts[i-1],pts[i],(int(60*alpha),int(130*alpha),int(246*alpha)),1,cv2.LINE_AA)
-
-        loiter_alerts=[]; now_t=time.time()
-        for d in dets:
-            x1,y1,x2,y2=d["box"]
-            col=CAT_BGR.get(d["category"],(180,180,180))
-            self._draw_box(img,x1,y1,x2,y2,col,f"{d['label'].upper()} {int(d['conf']*100)}%",draw_style)
-
-        for tid,(cx,cy,cat,entry_t) in track_map.items():
-            dur=now_t-entry_t
-            if cat=="person" and dur>2:
-                col=(0,80,220) if dur>loiter_thresh else (0,160,220)
-                cv2.putText(img,f"ID{tid} {int(dur)}s",(cx-20,cy+25),cv2.FONT_HERSHEY_SIMPLEX,.38,col,1,cv2.LINE_AA)
-                if dur>loiter_thresh and ac_loiter: loiter_alerts.append(f"LOITERING ID{tid} ({int(dur)}s)")
-
-        n_people=sum(1 for d in dets if d["category"]=="person")
-        if show_crowd_map and n_people>0:
-            bw=int(min(1.0,n_people/crowd_n)*(self._w-20))
-            bc=(80,180,80) if n_people<crowd_n//2 else (60,140,220) if n_people<crowd_n else (60,60,220)
-            cv2.rectangle(img,(10,10),(10+bw,20),bc,-1)
-            cv2.rectangle(img,(10,10),(self._w-10,20),(180,180,200),1)
-            cv2.putText(img,f"CROWD: {n_people}/{crowd_n}",(14,18),cv2.FONT_HERSHEY_SIMPLEX,.38,(80,80,120),1)
-
-        if show_fps_hud:
-            ov=img.copy()
-            cv2.rectangle(ov,(0,self._h-34),(self._w,self._h),(238,242,252),-1)
-            cv2.addWeighted(ov,0.8,img,0.2,0,img)
-            cv2.putText(img,
-                f"CAM-01  |  {datetime.datetime.now().strftime('%Y-%m-%d  %H:%M:%S')}  |"
-                f"  FPS:{self.fps}  OBJ:{len(dets)}  |  {'ACTIVE' if active_now else 'SLEEP'}",
-                (8,self._h-11),cv2.FONT_HERSHEY_SIMPLEX,.35,(60,90,160),1,cv2.LINE_AA)
-
-        rec_col=(60,80,220) if int(time.time()*2)%2==0 else (160,185,235)
-        cv2.circle(img,(self._w-16,16),6,rec_col,-1)
-        cv2.putText(img,"REC",(self._w-38,20),cv2.FONT_HERSHEY_SIMPLEX,.32,(60,80,200),1,cv2.LINE_AA)
+                cid   = int(box.cls[0])
+                conf  = float(box.conf[0])
+                lbl   = model_obj.names[cid]
+                cat   = get_category(cid, lbl, IS_WEAPON_MODEL)
+                x1,y1,x2,y2 = map(int, box.xyxy[0])
+                new_dets.append({
+                    "label":    lbl,
+                    "conf":     conf,
+                    "category": cat,
+                    "box":      (x1,y1,x2,y2),
+                    "cx":       (x1+x2)//2,
+                    "cy":       (y1+y2)//2,
+                })
+            with self._lock:
+                self.detections = new_dets
 
         with self._lock:
-            self.last_frame=img.copy()
-            self._zone_breaches=zone_breach_labels
-            self._loiter_alerts=loiter_alerts
-            self._n_people=n_people
+            dets = list(self.detections)
 
-        if self.frame_count%30==0:
-            hm_u8=(np.clip(self._heatmap,0,1)*255).astype(np.uint8)
-            st.session_state["heatmap"]=cv2.applyColorMap(hm_u8,cv2.COLORMAP_JET)
+        # ── Heatmap accumulation ──────────────────────────────────────────
+        self._heatmap *= self._heatmap_decay
+        for d in dets:
+            if d["category"] == "person":
+                cx, cy = d["cx"], d["cy"]
+                r = 30
+                y1c = max(0, cy-r); y2c = min(self._h, cy+r)
+                x1c = max(0, cx-r); x2c = min(self._w, cx+r)
+                self._heatmap[y1c:y2c, x1c:x2c] += 0.15
 
-        return av.VideoFrame.from_ndarray(img,format="bgr24")
+        # ── Track persons ─────────────────────────────────────────────────
+        person_centers = [
+            (d["cx"], d["cy"], d["category"])
+            for d in dets if d["category"] == "person"
+        ]
+        track_map = self._update_tracker(person_centers)
+
+        # Update trails
+        for tid, (cx,cy,_,_) in track_map.items():
+            self._trails[tid].appendleft((cx, cy))
+
+        # ── Draw heatmap ─────────────────────────────────────────────────
+        if show_heatmap:
+            hm_norm = np.clip(self._heatmap, 0, 1)
+            hm_u8   = (hm_norm * 255).astype(np.uint8)
+            hm_col  = cv2.applyColorMap(hm_u8, cv2.COLORMAP_JET)
+            mask    = hm_u8 > 10
+            img[mask] = cv2.addWeighted(img, 0.5, hm_col, 0.5, 0)[mask]
+
+        # ── Draw boundary zones ───────────────────────────────────────────
+        zone_breach_labels = []
+        for (y_pct, z_label, z_hex) in st.session_state.get("boundary_zones", []):
+            ly = int(self._h * (y_pct / 100))
+            z_bgr = tuple(int(z_hex.lstrip("#")[i:i+2], 16) for i in (4,2,0))
+            # Dashed line
+            dash_len, gap_len = 20, 10
+            x = 0
+            while x < self._w:
+                cv2.line(img, (x, ly), (min(x+dash_len, self._w), ly), z_bgr, 2)
+                x += dash_len + gap_len
+            cv2.putText(img, f"▶ {z_label}", (8, ly - 7),
+                        cv2.FONT_HERSHEY_SIMPLEX, .42, z_bgr, 1, cv2.LINE_AA)
+            # Check breaches
+            for d in dets:
+                if d["category"] == "person" and d["cy"] > ly:
+                    zone_breach_labels.append(f"{z_label} BREACH")
+
+        # ── Draw trails ───────────────────────────────────────────────────
+        if show_tracks:
+            for tid, trail in self._trails.items():
+                pts = list(trail)
+                for i in range(1, len(pts)):
+                    alpha = 1.0 - i / len(pts)
+                    col = (int(0*alpha), int(180*alpha), int(255*alpha))
+                    cv2.line(img, pts[i-1], pts[i], col, 1, cv2.LINE_AA)
+
+        # ── Draw detections ───────────────────────────────────────────────
+        loiter_alerts = []
+        now_t = time.time()
+        for d in dets:
+            x1,y1,x2,y2 = d["box"]
+            col = CAT_BGR.get(d["category"], (200,200,200))
+            label_txt = f"{d['label'].upper()} {int(d['conf']*100)}%"
+            self._draw_box(img, x1,y1,x2,y2, col, label_txt, draw_style)
+
+        # Loitering overlay on persons
+        for tid, (cx,cy,cat,entry_t) in track_map.items():
+            duration = now_t - entry_t
+            if cat == "person" and duration > 2:
+                dur_txt = f"ID{tid} {int(duration)}s"
+                col = (0,0,255) if duration > loiter_thresh else (0,200,255)
+                cv2.putText(img, dur_txt, (cx-20, cy+25),
+                            cv2.FONT_HERSHEY_SIMPLEX, .38, col, 1, cv2.LINE_AA)
+                if duration > loiter_thresh and ac_loiter:
+                    loiter_alerts.append(f"LOITERING ID{tid} ({int(duration)}s)")
+
+        # ── Crowd density bar ─────────────────────────────────────────────
+        n_people = sum(1 for d in dets if d["category"] == "person")
+        if show_crowd_map and n_people > 0:
+            bar_h  = 10
+            bar_w  = int(min(1.0, n_people / crowd_n) * (self._w - 20))
+            bar_col = (0,200,0) if n_people < crowd_n//2 else \
+                      (0,150,255) if n_people < crowd_n else (0,0,255)
+            cv2.rectangle(img, (10, 10), (10+bar_w, 10+bar_h), bar_col, -1)
+            cv2.rectangle(img, (10, 10), (self._w-10, 10+bar_h), (60,60,60), 1)
+            cv2.putText(img, f"CROWD: {n_people}/{crowd_n}", (14, 22),
+                        cv2.FONT_HERSHEY_SIMPLEX, .38, (200,200,200), 1)
+
+        # ── HUD ───────────────────────────────────────────────────────────
+        if show_fps_hud:
+            hud_h = 36
+            ov = img.copy()
+            cv2.rectangle(ov, (0, self._h-hud_h), (self._w, self._h), (0,0,0), -1)
+            cv2.addWeighted(ov, 0.65, img, 0.35, 0, img)
+
+            hud_txt = (
+                f"CAM-01 | {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')} | "
+                f"FPS:{self.fps} | OBJ:{len(dets)} | "
+                f"{'ACTIVE' if active_now else 'SLEEP'}"
+            )
+            cv2.putText(img, hud_txt,
+                        (8, self._h-10), cv2.FONT_HERSHEY_SIMPLEX, .38,
+                        (0,180,255), 1, cv2.LINE_AA)
+
+        # Blinking REC dot
+        rec_col = (0,0,200) if int(time.time()*2)%2==0 else (40,40,120)
+        cv2.circle(img, (self._w-18, 18), 7, rec_col, -1)
+        cv2.putText(img, "REC", (self._w-40,22),
+                    cv2.FONT_HERSHEY_SIMPLEX, .35, (0,0,200), 1, cv2.LINE_AA)
+
+        # Store frame + extra info
+        with self._lock:
+            self.last_frame        = img.copy()
+            self._zone_breaches    = zone_breach_labels
+            self._loiter_alerts    = loiter_alerts
+            self._n_people         = n_people
+
+        # Push heatmap snapshot to session state occasionally
+        if self.frame_count % 30 == 0:
+            hm_u8 = (np.clip(self._heatmap, 0, 1) * 255).astype(np.uint8)
+            st.session_state["heatmap"] = cv2.applyColorMap(hm_u8, cv2.COLORMAP_JET)
+
+        return av.VideoFrame.from_ndarray(img, format="bgr24")
 
 
 # ─────────────────────── TOP BAR ─────────────────────────────────────────────
-_now_str  = datetime.datetime.now().strftime("%Y-%m-%d  %H:%M:%S")
-_mode_dot = "sdot-active" if active_now else "sdot-warn"
-_mode_lbl = "ACTIVE" if active_now else "SLEEP"
+_now_str = datetime.datetime.now().strftime("%Y-%m-%d  %H:%M:%S")
+_mode_dot = "dot-g" if active_now else "dot-y"
+_mode_lbl = "ACTIVE" if active_now else "SCHEDULED SLEEP"
 
 st.markdown(f"""
 <div class="topbar">
   <div class="topbar-left">
-    <div class="topbar-logo">
-      <div class="topbar-logo-icon">🛡️</div>
-      Deep<em>Watch</em>
-    </div>
-    <div class="topbar-divider"></div>
-    <div class="topbar-badge">ENTERPRISE v2.0</div>
-    <div class="topbar-badge topbar-badge-warn">{op_mode.upper()}</div>
+    <div class="topbar-logo">DEEP<em>WATCH</em></div>
+    <div class="topbar-badge">v1.0</div>
+    <div class="topbar-badge" style="color:#ffc400;border-color:rgba(255,196,0,.35);
+         background:rgba(255,196,0,.08)">{op_mode.upper()}</div>
   </div>
   <div class="topbar-status">
-    <div class="status-item">
-      <span class="sdot sdot-online"></span>
-      <span class="status-label">SYSTEM</span>
-      <span class="status-value">ONLINE</span>
-    </div>
-    <div style="width:1px;height:16px;background:rgba(37,99,235,0.12)"></div>
-    <div class="status-item">
-      <span class="sdot {_mode_dot}"></span>
-      <span class="status-label">MODE</span>
-      <span class="status-value">{_mode_lbl}</span>
-    </div>
-    <div style="width:1px;height:16px;background:rgba(37,99,235,0.12)"></div>
-    <div class="status-item">
-      <span class="sdot sdot-active"></span>
-      <span class="status-label">CAM-01</span>
-      <span class="status-value">LIVE</span>
-    </div>
-    <div style="width:1px;height:16px;background:rgba(37,99,235,0.12)"></div>
-    <span style="font-family:'IBM Plex Mono',monospace;font-size:.65rem;color:#A8B4CC">{_now_str}</span>
+    <span><span class="sdot sdot-g"></span>SYS ONLINE</span>
+    <span><span class="sdot {_mode_dot}"></span>{_mode_lbl}</span>
+    <span><span class="sdot sdot-b"></span>CAM-01 LIVE</span>
+    <span style="color:#2a4060">{_now_str}</span>
   </div>
 </div>
 """, unsafe_allow_html=True)
 
 if not active_now:
-    st.markdown('<div class="alert-warning"><span>🌙</span><span>System is in <b>Scheduled Sleep</b> mode — detection paused until the active window.</span></div>',unsafe_allow_html=True)
+    st.markdown(
+        '<div class="alert-warn">🌙 System is in SCHEDULED SLEEP mode — '
+        'detection is paused until the active window.</div>',
+        unsafe_allow_html=True
+    )
 
-# ── METRIC BAR ────────────────────────────────────────────────────────────────
-uptime = int(time.time()-st.session_state.start_time)
-up_str = f"{uptime//3600:02d}:{(uptime%3600)//60:02d}:{uptime%60:02d}"
+# ────────────────────── METRIC BAR ───────────────────────────────────────────
+uptime   = int(time.time() - st.session_state.start_time)
+up_h     = uptime // 3600
+up_m     = (uptime % 3600) // 60
+up_s     = uptime % 60
+up_str   = f"{up_h:02d}:{up_m:02d}:{up_s:02d}"
 
 st.markdown(f"""
 <div class="mgrid">
-  <div class="mcard" style="--mc:#2563EB;--mb:#EFF6FF">
-    <div class="mcard-icon">👤</div>
+  <div class="mcard" style="--ac:#ff6b6b">
     <div class="mval">{st.session_state.people_count}</div>
-    <div class="mlbl">People Detected</div>
-    <div class="msub">this session</div>
+    <div class="mlbl">👤 People</div>
+    <div class="msub">total this session</div>
   </div>
-  <div class="mcard" style="--mc:#0891B2;--mb:#ECFEFF">
-    <div class="mcard-icon">🚗</div>
+  <div class="mcard" style="--ac:#00d4ff">
     <div class="mval">{st.session_state.vehicle_count}</div>
-    <div class="mlbl">Vehicles</div>
-    <div class="msub">this session</div>
+    <div class="mlbl">🚗 Vehicles</div>
+    <div class="msub">total this session</div>
   </div>
-  <div class="mcard" style="--mc:#DC2626;--mb:#FFF1F2">
-    <div class="mcard-icon">🚨</div>
+  <div class="mcard" style="--ac:#ff3030">
     <div class="mval">{st.session_state.alert_count}</div>
-    <div class="mlbl">Alerts Triggered</div>
-    <div class="msub">total count</div>
+    <div class="mlbl">🚨 Alerts</div>
+    <div class="msub">triggered</div>
   </div>
-  <div class="mcard" style="--mc:#D97706;--mb:#FFFBEB">
-    <div class="mcard-icon">📸</div>
+  <div class="mcard" style="--ac:#ffc400">
     <div class="mval">{st.session_state.snap_count}</div>
-    <div class="mlbl">Snapshots</div>
+    <div class="mlbl">📸 Snapshots</div>
     <div class="msub">auto-captured</div>
   </div>
-  <div class="mcard" style="--mc:#059669;--mb:#ECFDF5">
-    <div class="mcard-icon">⏱</div>
-    <div class="mval" style="font-size:1.4rem;letter-spacing:-.5px">{up_str}</div>
-    <div class="mlbl">System Uptime</div>
+  <div class="mcard" style="--ac:#00ff88">
+    <div class="mval" style="font-size:1.25rem">{up_str}</div>
+    <div class="mlbl">⏱ Uptime</div>
     <div class="msub">hh : mm : ss</div>
   </div>
 </div>
 """, unsafe_allow_html=True)
 
 
-# ── MAIN LAYOUT ───────────────────────────────────────────────────────────────
-left_col, right_col = st.columns([13,9], gap="small")
+# ─────────────────────── MAIN LAYOUT ─────────────────────────────────────────
+left_col, right_col = st.columns([13, 9], gap="small")
 
+# ── LEFT: VIDEO + SNAPSHOTS ───────────────────────────────────────────────────
 with left_col:
-    st.markdown("""
-    <div class="panel">
-      <div class="panel-hdr">
-        <div class="panel-hdr-left">
-          <div class="panel-hdr-dot"></div>
-          <span class="panel-hdr-title">CAM-01 — Live Feed</span>
-        </div>
-        <span class="panel-badge panel-badge-live">● RECORDING</span>
-      </div>
-    """, unsafe_allow_html=True)
+    st.markdown('<div class="panel"><div class="panel-hdr">▶ CAM-01 — LIVE FEED'
+                '<span class="panel-hdr-badge">RECORDING</span></div>',
+                unsafe_allow_html=True)
 
-    facing = "environment" if "Back" in camera_facing else "user"
+    facing   = "environment" if "Back" in camera_facing else "user"
     ctx = webrtc_streamer(
         key=f"deepwatch-{facing}-{model_key}",
         video_processor_factory=AdvancedVideoProcessor,
         rtc_configuration=RTC_CONFIG,
         media_stream_constraints={
-            "video":{"facingMode":{"ideal":facing},"width":{"ideal":1280},
-                     "height":{"ideal":720},"frameRate":{"ideal":30}},
-            "audio":False,
+            "video": {
+                "facingMode":  {"ideal": facing},
+                "width":       {"ideal": 1280},
+                "height":      {"ideal": 720},
+                "frameRate":   {"ideal": 30},
+            },
+            "audio": False,
         },
         async_processing=True,
     )
     st.markdown("</div>", unsafe_allow_html=True)
 
-    st.markdown(f"""
-    <div class="panel">
-      <div class="panel-hdr">
-        <div class="panel-hdr-left">
-          <div class="panel-hdr-dot" style="background:#D97706;box-shadow:0 0 0 3px rgba(217,119,6,0.12)"></div>
-          <span class="panel-hdr-title">Auto-Captured Snapshots</span>
-        </div>
-        <span class="panel-badge">{st.session_state.snap_count} TOTAL</span>
-      </div>
-    """, unsafe_allow_html=True)
-
+    # ── Snapshots ──────────────────────────────────────────────────────────
+    st.markdown('<div class="panel"><div class="panel-hdr">📸 AUTO-CAPTURED SNAPSHOTS'
+                f'<span class="panel-hdr-badge">{st.session_state.snap_count} TOTAL</span></div>',
+                unsafe_allow_html=True)
     if st.session_state.snapshots:
-        snap_list=list(st.session_state.snapshots)[:6]
-        n_cols=min(3,len(snap_list)); cols=st.columns(n_cols)
-        for idx,snap in enumerate(snap_list):
-            with cols[idx%n_cols]:
-                st.image(snap["img"],caption=f"{snap['label']} · {snap['time']}",use_container_width=True)
+        snap_list = list(st.session_state.snapshots)[:6]
+        n_cols    = min(3, len(snap_list))
+        cols      = st.columns(n_cols)
+        for idx, snap in enumerate(snap_list):
+            with cols[idx % n_cols]:
+                st.image(snap["img"],
+                         caption=f"{snap['label']} · {snap['time']}",
+                         use_container_width=True)
     else:
-        st.markdown("""
-        <div style="padding:18px;text-align:center;color:#A8B4CC;font-size:.74rem;
-                    font-family:'IBM Plex Mono',monospace;background:#FAFBFE;
-                    border-radius:8px;border:1px dashed #E8EAF4;line-height:1.7">
-          No snapshots captured yet<br>
-          <span style="font-size:.65rem;color:#C5CEDF">Detection events will trigger automatic capture</span>
-        </div>
-        """, unsafe_allow_html=True)
+        st.markdown(
+            '<p style="color:#2a4060;font-family:\'Share Tech Mono\',monospace;'
+            'font-size:.75rem;padding:4px">No snapshots yet — detection will trigger captures automatically.</p>',
+            unsafe_allow_html=True
+        )
     st.markdown("</div>", unsafe_allow_html=True)
 
+    # ── Zone status ─────────────────────────────────────────────────────────
     if boundary_zones:
-        st.markdown("""
-        <div class="panel">
-          <div class="panel-hdr">
-            <div class="panel-hdr-left">
-              <div class="panel-hdr-dot" style="background:#F59E0B;box-shadow:0 0 0 3px rgba(245,158,11,0.12)"></div>
-              <span class="panel-hdr-title">Boundary Zone Status</span>
-            </div>
-          </div>
-        """, unsafe_allow_html=True)
-        for y_pct,z_label,z_hex in boundary_zones:
+        st.markdown('<div class="panel"><div class="panel-hdr">🚧 BOUNDARY ZONE STATUS</div>',
+                    unsafe_allow_html=True)
+        for y_pct, z_label, z_hex in boundary_zones:
             st.markdown(
-                f'<div class="zone-badge"><div class="zone-dot" style="background:{z_hex}"></div>'
-                f'<span class="zone-text">{z_label} — active boundary at {y_pct}% frame height</span></div>',
-                unsafe_allow_html=True)
+                f'<div class="zone-info">▸ {z_label} — boundary at {y_pct}% height</div>',
+                unsafe_allow_html=True
+            )
         st.markdown("</div>", unsafe_allow_html=True)
 
 
+# ── RIGHT: DETECTIONS + LOG + STATS ──────────────────────────────────────────
 with right_col:
-    st.markdown("""
-    <div class="panel">
-      <div class="panel-hdr">
-        <div class="panel-hdr-left">
-          <div class="panel-hdr-dot" style="background:#DC2626;box-shadow:0 0 0 3px rgba(220,38,38,0.12)"></div>
-          <span class="panel-hdr-title">Live Detections</span>
-        </div>
-        <span class="panel-badge panel-badge-live">LIVE</span>
-      </div>
-    """, unsafe_allow_html=True)
+
+    # ── Live Detections ─────────────────────────────────────────────────────
+    st.markdown('<div class="panel"><div class="panel-hdr">🎯 LIVE DETECTIONS</div>',
+                unsafe_allow_html=True)
 
     alert_placeholder  = st.empty()
     detect_placeholder = st.empty()
 
     if ctx.video_processor:
-        proc = ctx.video_processor
+        proc  = ctx.video_processor
         with proc._lock:
             dets          = list(proc.detections)
             fps_val       = proc.fps
             last_frm      = proc.last_frame.copy() if proc.last_frame is not None else None
-            zone_breaches = getattr(proc,"_zone_breaches",[])
-            loiter_alerts = getattr(proc,"_loiter_alerts",[])
-            n_people_live = getattr(proc,"_n_people",0)
+            zone_breaches = getattr(proc, "_zone_breaches", [])
+            loiter_alerts = getattr(proc, "_loiter_alerts", [])
+            n_people_live = getattr(proc, "_n_people", 0)
 
+        # ── Update session counters ─────────────────────────────────────
         if dets:
             for d in dets:
-                st.session_state.label_counts[d["label"]]+=1
-                if d["category"]=="person": st.session_state.people_count+=1
-                elif d["category"]=="vehicle": st.session_state.vehicle_count+=1
-            st.session_state.total_detections+=len(dets)
+                st.session_state.label_counts[d["label"]] += 1
+                if d["category"] == "person":
+                    st.session_state.people_count += 1
+                elif d["category"] == "vehicle":
+                    st.session_state.vehicle_count += 1
+            st.session_state.total_detections += len(dets)
 
-        crowd_alert=""
-        if ac_crowd and n_people_live>=crowd_n:
-            crowd_alert=f"CROWD DENSITY ALERT — {n_people_live} PEOPLE IN FRAME"
+        # ── Crowd alert ─────────────────────────────────────────────────
+        crowd_alert = ""
+        if ac_crowd and n_people_live >= crowd_n:
+            crowd_alert = f"CROWD DENSITY ALERT — {n_people_live} PEOPLE IN FRAME"
 
-        weapon_dets=[d for d in dets if d["category"]=="weapon"]
-        now_t2=time.time()
+        # ── WEAPON DETECTION — Instant priority alert ────────────────────
+        weapon_dets = [d for d in dets if d["category"] == "weapon"]
+        now_t2 = time.time()
 
         if weapon_dets and last_frm is not None:
-            if now_t2-st.session_state.get("last_weapon_alert",0)>10:
-                st.session_state["last_weapon_alert"]=now_t2
-                st.session_state.alert_count+=1
-                weapon_labels=", ".join(f"{d['label'].upper()} ({int(d['conf']*100)}%)" for d in weapon_dets)
-                alert_placeholder.markdown(f"""
-                <div class="alert-critical">
-                  <div class="alert-critical-icon">⚠️</div>
-                  <div>
-                    <div class="alert-critical-title">WEAPON DETECTED — IMMEDIATE RESPONSE REQUIRED</div>
-                    <div class="alert-critical-sub">{weapon_labels}</div>
-                  </div>
-                </div>""", unsafe_allow_html=True)
+            # Always show weapon alert — separate cooldown (10s)
+            if now_t2 - st.session_state.get("last_weapon_alert", 0) > 10:
+                st.session_state["last_weapon_alert"] = now_t2
+                st.session_state.alert_count += 1
 
-                st.session_state.event_log.appendleft({"time":datetime.datetime.now().strftime("%H:%M:%S"),
-                    "msg":f"⚠ WEAPON — {weapon_labels}","level":"critical","count":len(weapon_dets)})
-                threading.Thread(target=db_insert,
-                    args=("critical","weapon",weapon_labels,f"WEAPON DETECTED: {weapon_labels}",
-                          max(d["conf"] for d in weapon_dets),"CAM-01"),daemon=True).start()
+                weapon_labels = ", ".join(
+                    f"{d['label'].upper()} ({int(d['conf']*100)}%)"
+                    for d in weapon_dets
+                )
+                weapon_html = (
+                    f'<div style="background:linear-gradient(135deg,rgba(255,0,0,.35),'
+                    f'rgba(180,0,0,.25));border:2px solid #ff0000;border-radius:8px;'
+                    f'padding:12px 16px;margin:5px 0;font-family:\'Share Tech Mono\','
+                    f'monospace;font-size:.85rem;color:#ff3030;'
+                    f'animation:apulse .5s ease infinite alternate;">'
+                    f'🔫 WEAPON DETECTED — {weapon_labels}</div>'
+                )
+                alert_placeholder.markdown(weapon_html, unsafe_allow_html=True)
 
-                _,buf=cv2.imencode(".jpg",last_frm,[cv2.IMWRITE_JPEG_QUALITY,95])
-                snap_bytes=buf.tobytes()
-                snap_rgb=cv2.cvtColor(last_frm,cv2.COLOR_BGR2RGB)
-                st.session_state.snapshots.appendleft({"img":snap_rgb,
-                    "time":datetime.datetime.now().strftime("%H:%M:%S"),
-                    "label":f"⚠ {weapon_labels}","bytes":snap_bytes})
-                st.session_state.snap_count+=1; st.session_state.last_snap_time=now_t2
+                # Log weapon event
+                st.session_state.event_log.appendleft({
+                    "time":  datetime.datetime.now().strftime("%H:%M:%S"),
+                    "msg":   f"🔫 WEAPON — {weapon_labels}",
+                    "level": "critical",
+                    "count": len(weapon_dets),
+                })
+                threading.Thread(
+                    target=db_insert,
+                    args=("critical", "weapon", weapon_labels,
+                          f"WEAPON DETECTED: {weapon_labels}",
+                          max(d["conf"] for d in weapon_dets), "CAM-01"),
+                    daemon=True
+                ).start()
 
+                # ── Weapon Snapshot (always, no cooldown check) ──────────
+                _, buf      = cv2.imencode(".jpg", last_frm, [cv2.IMWRITE_JPEG_QUALITY, 95])
+                snap_bytes  = buf.tobytes()
+                snap_rgb    = cv2.cvtColor(last_frm, cv2.COLOR_BGR2RGB)
+                st.session_state.snapshots.appendleft({
+                    "img":   snap_rgb,
+                    "time":  datetime.datetime.now().strftime("%H:%M:%S"),
+                    "label": f"🔫 {weapon_labels}",
+                    "bytes": snap_bytes,
+                })
+                st.session_state.snap_count += 1
+                st.session_state.last_snap_time = now_t2
+
+                # ── Weapon Email (instant, always sends) ─────────────────
                 if email_enabled:
-                    max_conf_w=max(d["conf"] for d in weapon_dets)
-                    _wsubj="WEAPON DETECTED on CAM-01 — IMMEDIATE ACTION REQUIRED"
-                    _wbody=(f"⚠  WEAPON ALERT — DeepWatch Enterprise\n{'='*50}\n\n"
-                             f"Weapon(s): {weapon_labels}\nConfidence: {max_conf_w:.0%}\n"
-                             f"Camera: CAM-01\nTime: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
-                             f"{'='*50}\nSnapshot attached. Immediate action recommended.\n")
-                    def _send_weapon(subj,body,img_b):
-                        ok,msg=send_email_alert(subj,body,img_b)
-                        st.session_state.email_count+=1
-                        st.session_state.event_log.appendleft({"time":datetime.datetime.now().strftime("%H:%M:%S"),
-                            "msg":f"Email {'✓ sent' if ok else '✗ '+msg}","level":"info" if ok else "critical","count":0})
-                    threading.Thread(target=_send_weapon,args=(_wsubj,_wbody,snap_bytes),daemon=True).start()
+                    max_conf_w = max(d["conf"] for d in weapon_dets)
+                    _wsubj = f"🔫 WEAPON DETECTED on CAM-01 — IMMEDIATE ACTION REQUIRED"
+                    _wbody = (
+                        f"⚠️  WEAPON ALERT — DeepWatch Security System\n"
+                        f"{'='*50}\n\n"
+                        f"🔫 Weapon(s) Detected: {weapon_labels}\n"
+                        f"📊 Confidence: {max_conf_w:.0%}\n"
+                        f"📷 Camera: CAM-01\n"
+                        f"🕐 Time: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
+                        f"{'='*50}\n"
+                        f"Snapshot attached. Immediate action recommended.\n"
+                        f"DeepWatch v1.0 — Automated Security Alert\n"
+                    )
+                    def _send_weapon(subj, body, img_b):
+                        ok, msg = send_email_alert(subj, body, img_b)
+                        st.session_state.email_count += 1
+                        st.session_state.event_log.appendleft({
+                            "time":  datetime.datetime.now().strftime("%H:%M:%S"),
+                            "msg":   f"🔫 Weapon email {'✓ sent' if ok else '✗ FAILED: '+msg}",
+                            "level": "info" if ok else "critical",
+                            "count": 0,
+                        })
+                    threading.Thread(
+                        target=_send_weapon,
+                        args=(_wsubj, _wbody, snap_bytes),
+                        daemon=True
+                    ).start()
 
-        hit_cats={d["category"] for d in dets}&st.session_state.alert_cats
-        all_alerts=[]
-        if hit_cats and "weapon" not in hit_cats: all_alerts+=[f"DETECTED — {', '.join(sorted(hit_cats)).upper()}"]
-        if zone_breaches: all_alerts+=zone_breaches
-        if loiter_alerts: all_alerts+=loiter_alerts
-        if crowd_alert: all_alerts.append(crowd_alert)
+        # ── Trigger regular alerts ───────────────────────────────────────
+        hit_cats     = {d["category"] for d in dets} & st.session_state.alert_cats
+        all_alerts   = []
+        if hit_cats and "weapon" not in hit_cats:  # weapon handled above
+            all_alerts += [f"DETECTED — {', '.join(sorted(hit_cats)).upper()}"]
+        if zone_breaches:
+            all_alerts += zone_breaches
+        if loiter_alerts:
+            all_alerts += loiter_alerts
+        if crowd_alert:
+            all_alerts.append(crowd_alert)
 
-        if all_alerts and (now_t2-st.session_state.last_alert_time>alert_cooldown):
-            st.session_state.last_alert_time=now_t2
-            st.session_state.alert_count+=1
-            alert_html="".join(f"""<div class="alert-critical">
-              <div class="alert-critical-icon">🚨</div>
-              <div><div class="alert-critical-title">{a}</div></div>
-            </div>""" for a in all_alerts)
-            if not weapon_dets: alert_placeholder.markdown(alert_html,unsafe_allow_html=True)
+        if all_alerts and (now_t2 - st.session_state.last_alert_time > alert_cooldown):
+            st.session_state.last_alert_time = now_t2
+            st.session_state.alert_count    += 1
 
+            alert_html = "".join(
+                f'<div class="alert-crit">🚨 {a}</div>' for a in all_alerts
+            )
+            if not weapon_dets:  # don't overwrite weapon alert
+                alert_placeholder.markdown(alert_html, unsafe_allow_html=True)
+
+            # Log to deque + DB
             for a in all_alerts:
-                st.session_state.event_log.appendleft({"time":datetime.datetime.now().strftime("%H:%M:%S"),
-                    "msg":a,"level":"critical","count":len(dets)})
-                threading.Thread(target=db_insert,args=("critical","alert","ALERT",a,1.0,"CAM-01"),daemon=True).start()
+                entry = {
+                    "time":  datetime.datetime.now().strftime("%H:%M:%S"),
+                    "msg":   a,
+                    "level": "critical",
+                    "count": len(dets),
+                }
+                st.session_state.event_log.appendleft(entry)
+                threading.Thread(
+                    target=db_insert,
+                    args=("critical", "alert", "ALERT", a, 1.0, "CAM-01"),
+                    daemon=True
+                ).start()
 
-            snap_hit={d["category"] for d in dets}&st.session_state.snap_cats
-            snap_hit.discard("weapon")
+            # ── Snapshot for non-weapon alerts ────────────────────────
+            snap_hit = {d["category"] for d in dets} & st.session_state.snap_cats
+            snap_hit.discard("weapon")  # weapon snapshot already done above
             if snap_hit and last_frm is not None:
-                if now_t2-st.session_state.last_snap_time>snap_cooldown:
-                    st.session_state.last_snap_time=now_t2; st.session_state.snap_count+=1
-                    _,buf=cv2.imencode(".jpg",last_frm); snap_bytes=buf.tobytes()
-                    snap_rgb=cv2.cvtColor(last_frm,cv2.COLOR_BGR2RGB)
-                    hit_labels=", ".join(d["label"].upper() for d in dets if d["category"] in snap_hit)
-                    st.session_state.snapshots.appendleft({"img":snap_rgb,
-                        "time":datetime.datetime.now().strftime("%H:%M:%S"),
-                        "label":hit_labels,"bytes":snap_bytes})
+                if now_t2 - st.session_state.last_snap_time > snap_cooldown:
+                    st.session_state.last_snap_time = now_t2
+                    st.session_state.snap_count    += 1
+
+                    _, buf      = cv2.imencode(".jpg", last_frm)
+                    snap_bytes  = buf.tobytes()
+                    snap_rgb    = cv2.cvtColor(last_frm, cv2.COLOR_BGR2RGB)
+                    hit_labels  = ", ".join(
+                        d["label"].upper() for d in dets
+                        if d["category"] in snap_hit
+                    )
+                    st.session_state.snapshots.appendleft({
+                        "img":   snap_rgb,
+                        "time":  datetime.datetime.now().strftime("%H:%M:%S"),
+                        "label": hit_labels,
+                        "bytes": snap_bytes,
+                    })
+
+                    # ── Email ─────────────────────────────────────────
                     if email_enabled:
-                        max_conf=max((d["conf"] for d in dets if d["category"] in snap_hit),default=0)
-                        email_subj=f"{hit_labels} detected on CAM-01"
-                        email_body=(f"Detection: {hit_labels}\nConfidence: {max_conf:.0%}\n"
+                        max_conf = max(
+                            (d["conf"] for d in dets if d["category"] in snap_hit),
+                            default=0
+                        )
+                        email_subj = f"{hit_labels} detected on CAM-01"
+                        email_body = (
+                            f"Detection: {hit_labels}\n"
+                            f"Confidence: {max_conf:.0%}\n"
                             f"Zone breaches: {', '.join(zone_breaches) or 'None'}\n"
                             f"Loitering: {', '.join(loiter_alerts) or 'None'}\n"
-                            f"Time: {datetime.datetime.now().isoformat()}\nCamera: CAM-01\n")
-                        def _send(subj,body,img_b):
-                            ok,msg=send_email_alert(subj,body,img_b)
-                            st.session_state.email_count+=1
-                            st.session_state.event_log.appendleft({"time":datetime.datetime.now().strftime("%H:%M:%S"),
-                                "msg":f"Email {'✓ sent' if ok else '✗ '+msg}","level":"info" if ok else "critical","count":0})
-                        threading.Thread(target=_send,args=(email_subj,email_body,snap_bytes),daemon=True).start()
+                            f"Time: {datetime.datetime.now().isoformat()}\n"
+                            f"Camera: CAM-01\n"
+                        )
+                        def _send(subj, body, img_b):
+                            ok, msg = send_email_alert(subj, body, img_b)
+                            st.session_state.email_count += 1
+                            lv = "info" if ok else "critical"
+                            st.session_state.event_log.appendleft({
+                                "time":  datetime.datetime.now().strftime("%H:%M:%S"),
+                                "msg":   f"Email {'✓ sent' if ok else '✗ FAILED: '+msg}",
+                                "level": lv,
+                                "count": 0,
+                            })
+                        threading.Thread(
+                            target=_send,
+                            args=(email_subj, email_body, snap_bytes),
+                            daemon=True
+                        ).start()
 
+        # ── Object tags + confidence bars ────────────────────────────
         if dets:
-            tags_html="".join(
-                f'<span class="otag t-{d["category"]}">{CAT_ICON.get(d["category"],"📦")} {d["label"]} {int(d["conf"]*100)}%</span>'
-                for d in sorted(dets,key=lambda x:-x["conf"]))
-            bars_html=""
-            for d in sorted(dets,key=lambda x:-x["conf"])[:10]:
-                pct=int(d["conf"]*100); hx=CAT_HEX.get(d["category"],"#2563EB")
-                bars_html+=f"""
-                <div class="det-item">
-                  <div class="det-row">
-                    <span class="det-label">{CAT_ICON.get(d["category"],"📦")} {d["label"].upper()}</span>
-                    <span class="det-conf" style="color:{hx}">{pct}%</span>
+            tags_html = "".join(
+                f'<span class="otag t-{d["category"]}">'
+                f'{CAT_ICON.get(d["category"],"📦")} {d["label"]} '
+                f'{int(d["conf"]*100)}%</span>'
+                for d in sorted(dets, key=lambda x: -x["conf"])
+            )
+
+            bars_html = ""
+            for d in sorted(dets, key=lambda x: -x["conf"])[:10]:
+                pct = int(d["conf"] * 100)
+                hx  = CAT_HEX.get(d["category"], "#00c8ff")
+                bars_html += f"""
+                <div style="margin:4px 0">
+                  <div style="display:flex;justify-content:space-between;
+                              font-family:'Share Tech Mono',monospace;font-size:.69rem;color:#5a7090">
+                    <span>{d['label'].upper()}</span>
+                    <span style="color:{hx}">{pct}%</span>
                   </div>
                   <div class="cbar-wrap">
                     <div class="cbar" style="width:{pct}%;background:linear-gradient(90deg,{hx},{hx}88)"></div>
                   </div>
                 </div>"""
-            fps_html=f'<div class="fps-strip"><span class="fps-chip">FPS {fps_val}</span><span class="fps-chip">FRAME {proc.frame_count}</span><span class="fps-chip">OBJ {len(dets)}</span></div>'
-            detect_placeholder.markdown(tags_html+"<br>"+bars_html+fps_html,unsafe_allow_html=True)
+
+            fps_html = (
+                f'<div style="font-family:\'Share Tech Mono\',monospace;font-size:.65rem;'
+                f'color:#2a4060;margin-top:6px">FPS: {fps_val} | '
+                f'FRAME: {proc.frame_count} | OBJECTS: {len(dets)}</div>'
+            )
+            detect_placeholder.markdown(
+                tags_html + "<br>" + bars_html + fps_html, unsafe_allow_html=True
+            )
         else:
-            detect_placeholder.markdown("""
-            <div style="padding:16px;text-align:center;color:#A8B4CC;font-size:.73rem;
-                        font-family:'IBM Plex Mono',monospace;background:#FAFBFE;
-                        border-radius:8px;border:1px dashed #E8EAF4">
-              No objects detected in current frame
-            </div>""", unsafe_allow_html=True)
+            detect_placeholder.markdown(
+                '<p style="color:#1e3050;font-family:\'Share Tech Mono\',monospace;'
+                'font-size:.75rem;padding:4px">NO OBJECTS IN FRAME</p>',
+                unsafe_allow_html=True
+            )
     else:
-        detect_placeholder.markdown("""
-        <div style="padding:16px;text-align:center;color:#A8B4CC;font-size:.73rem;
-                    font-family:'IBM Plex Mono',monospace;background:#FAFBFE;
-                    border-radius:8px;border:1px dashed #E8EAF4">
-          Press <b>Start</b> to activate the camera feed
-        </div>""", unsafe_allow_html=True)
+        detect_placeholder.markdown(
+            '<p style="color:#1e3050;font-family:\'Share Tech Mono\',monospace;'
+            'font-size:.75rem;padding:4px">▶ PRESS START TO ACTIVATE FEED</p>',
+            unsafe_allow_html=True
+        )
 
     st.markdown("</div>", unsafe_allow_html=True)
 
-    # Statistics
-    st.markdown(f"""
-    <div class="panel">
-      <div class="panel-hdr">
-        <div class="panel-hdr-left">
-          <div class="panel-hdr-dot" style="background:#059669;box-shadow:0 0 0 3px rgba(5,150,105,0.12)"></div>
-          <span class="panel-hdr-title">Session Statistics</span>
-        </div>
-        <span class="panel-badge">{st.session_state.total_detections:,} TOTAL</span>
-      </div>
-    """, unsafe_allow_html=True)
+    # ── Session Statistics ───────────────────────────────────────────────────
+    st.markdown('<div class="panel"><div class="panel-hdr">📊 SESSION STATISTICS'
+                f'<span class="panel-hdr-badge">{st.session_state.total_detections} TOTAL</span></div>',
+                unsafe_allow_html=True)
 
     if st.session_state.label_counts:
-        top_items=sorted(st.session_state.label_counts.items(),key=lambda x:-x[1])[:10]
-        max_c=max(c for _,c in top_items); bars_s=""
-        for label,count in top_items:
-            cid_m=next((i for i,n in model_obj.names.items() if n==label),999)
-            cat=get_category(cid_m); hx=CAT_HEX.get(cat,"#2563EB"); bw=int(count/max_c*100)
-            bars_s+=f"""
-            <div class="stat-item">
-              <div class="stat-row">
-                <span class="stat-label">{CAT_ICON.get(cat,"📦")} {label.upper()}</span>
-                <span class="stat-count" style="color:{hx}">{count:,}×</span>
+        top_items = sorted(
+            st.session_state.label_counts.items(), key=lambda x: -x[1]
+        )[:10]
+        max_c = max(c for _, c in top_items)
+
+        bars = ""
+        for label, count in top_items:
+            cid_match = next(
+                (i for i, n in model_obj.names.items() if n == label), 999
+            )
+            cat = get_category(cid_match)
+            hx  = CAT_HEX.get(cat, "#00c8ff")
+            bw  = int(count / max_c * 100)
+            bars += f"""
+            <div style="margin:5px 0">
+              <div style="display:flex;justify-content:space-between;
+                          font-family:'Share Tech Mono',monospace;font-size:.69rem;color:#5a7090">
+                <span>{CAT_ICON.get(cat,'📦')} {label.upper()}</span>
+                <span style="color:{hx};font-weight:700">{count:,}×</span>
               </div>
               <div class="cbar-wrap">
-                <div class="cbar" style="width:{bw}%;background:linear-gradient(90deg,{hx},{hx}55)"></div>
+                <div class="cbar" style="width:{bw}%;background:linear-gradient(90deg,{hx},{hx}44)"></div>
               </div>
             </div>"""
-        st.markdown(bars_s, unsafe_allow_html=True)
+        st.markdown(bars, unsafe_allow_html=True)
     else:
-        st.markdown('<div style="padding:12px 8px;color:#A8B4CC;font-size:.73rem;font-family:\'IBM Plex Mono\',monospace;text-align:center">Awaiting first detection…</div>',unsafe_allow_html=True)
+        st.markdown(
+            '<p style="color:#1e3050;font-family:\'Share Tech Mono\',monospace;'
+            'font-size:.75rem">Awaiting detections…</p>',
+            unsafe_allow_html=True
+        )
     st.markdown("</div>", unsafe_allow_html=True)
 
-    # Event Log
-    st.markdown("""
-    <div class="panel">
-      <div class="panel-hdr">
-        <div class="panel-hdr-left">
-          <div class="panel-hdr-dot" style="background:#8B5CF6;box-shadow:0 0 0 3px rgba(139,92,246,0.12)"></div>
-          <span class="panel-hdr-title">Event Log</span>
-        </div>
-        <span class="panel-badge panel-badge-live">LIVE</span>
-      </div>
-    """, unsafe_allow_html=True)
+    # ── Event Log ───────────────────────────────────────────────────────────
+    st.markdown('<div class="panel"><div class="panel-hdr">📋 EVENT LOG'
+                '<span class="panel-hdr-badge">LIVE</span></div>',
+                unsafe_allow_html=True)
 
-    log_tab1,log_tab2=st.tabs(["Live (Session)","Persisted (DB)"])
+    log_tab1, log_tab2 = st.tabs(["Live (Session)", "Persisted (DB)"])
 
     with log_tab1:
         if st.session_state.event_log:
-            lvl_map={"critical":"lc","warning":"lw","info":"li","success":"ls"}
-            html=""
+            lvl_map = {"critical":"lc","warning":"lw","info":"li","success":"ls"}
+            html = ""
             for e in list(st.session_state.event_log)[:20]:
-                cls=lvl_map.get(e.get("level","info"),"li")
-                cnt=f"+{e['count']}" if e.get("count") else ""
-                msg=e["msg"][:58]+("…" if len(e["msg"])>58 else "")
-                html+=f'<div class="log-row {cls}"><span class="log-t">{e["time"]}</span><span class="log-m">{msg}</span><span class="log-n">{cnt}</span></div>'
-            st.markdown(html,unsafe_allow_html=True)
+                cls = lvl_map.get(e.get("level","info"), "li")
+                cnt = f"+{e['count']}" if e.get("count") else ""
+                msg = e["msg"][:60] + ("…" if len(e["msg"])>60 else "")
+                html += f"""
+                <div class="log-row {cls}">
+                  <span class="log-t">{e['time']}</span>
+                  <span class="log-m">{msg}</span>
+                  <span class="log-n">{cnt}</span>
+                </div>"""
+            st.markdown(html, unsafe_allow_html=True)
         else:
-            st.markdown('<div style="padding:12px;color:#A8B4CC;font-size:.7rem;font-family:\'IBM Plex Mono\',monospace;text-align:center">No events recorded yet</div>',unsafe_allow_html=True)
+            st.markdown(
+                '<p style="color:#1e3050;font-family:\'Share Tech Mono\',monospace;'
+                'font-size:.75rem">Log is empty</p>',
+                unsafe_allow_html=True
+            )
 
     with log_tab2:
-        db_rows=db_fetch_recent(30)
+        db_rows = db_fetch_recent(30)
         if db_rows:
-            lvl_map={"critical":"lc","warning":"lw","info":"li"}; html=""
+            lvl_map = {"critical":"lc","warning":"lw","info":"li"}
+            html = ""
             for row in db_rows:
-                ts,level,cat,label,msg,conf,cam=row
-                cls=lvl_map.get(level,"li"); t_s=ts[11:19]; conf_s=f"{conf:.0%}" if conf else ""
-                html+=f'<div class="log-row {cls}"><span class="log-t">{t_s}</span><span class="log-m">[{cam}] {msg[:45]}</span><span class="log-n" style="color:#7B8DB0">{conf_s}</span></div>'
-            st.markdown(html,unsafe_allow_html=True)
+                ts, level, cat, label, msg, conf, cam = row
+                cls = lvl_map.get(level, "li")
+                t_short = ts[11:19]
+                conf_s  = f"{conf:.0%}" if conf else ""
+                html += f"""
+                <div class="log-row {cls}">
+                  <span class="log-t">{t_short}</span>
+                  <span class="log-m">[{cam}] {msg[:45]}</span>
+                  <span class="log-n" style="color:#5a7090">{conf_s}</span>
+                </div>"""
+            st.markdown(html, unsafe_allow_html=True)
         else:
-            st.markdown('<div style="padding:12px;color:#A8B4CC;font-size:.7rem;font-family:\'IBM Plex Mono\',monospace;text-align:center">No persisted events yet</div>',unsafe_allow_html=True)
+            st.markdown(
+                '<p style="color:#1e3050;font-family:\'Share Tech Mono\',monospace;'
+                'font-size:.75rem">No persisted events yet</p>',
+                unsafe_allow_html=True
+            )
 
     st.markdown("</div>", unsafe_allow_html=True)
 
 
-# ── FOOTER ────────────────────────────────────────────────────────────────────
+# ─────────────────────────── FOOTER ──────────────────────────────────────────
 st.markdown("""
 <div class="vfooter">
-  <strong>DeepWatch Enterprise v2.0</strong>
-  &nbsp;·&nbsp; YOLOv8 &nbsp;·&nbsp; Streamlit &nbsp;·&nbsp;
-  OpenCV &nbsp;·&nbsp; WebRTC &nbsp;·&nbsp; SQLite
-  &nbsp;&nbsp;|&nbsp;&nbsp;
-  EU AI Act Compliant &nbsp;·&nbsp; Educational Portfolio Project &nbsp;·&nbsp;
-  2026 &nbsp;·&nbsp; Created by Raja Roy
+  DEEPWATCH v1.0  ·  YOLOv8  ·  STREAMLIT  ·  OPENCV  ·  WEBRTC  ·  SQLITE
+  &nbsp;|&nbsp; EU AI ACT COMPLIANT PORTFOLIO PROJECT and This is just for Educational Purposses ·  2026.created by Raja Roy
 </div>
 """, unsafe_allow_html=True)
 
+# ─────────────────────────────────────────────────────────────────────────────
 # streamlit run app_version2.py
