@@ -477,7 +477,8 @@ def send_email_alert(subject: str, body: str, img_bytes: bytes = None) -> tuple[
     smtp_port = int(_env("SMTP_PORT", "587"))
     smtp_user = _env("SMTP_USER", "")
     smtp_pass = _env("SMTP_PASS", "")
-    smtp_to   = _env("SMTP_TO",   smtp_user)
+    # ── CHANGE 1: Prefer user-supplied recipient email; fall back to SMTP_TO secret ──
+    smtp_to   = st.session_state.get("user_alert_email", "").strip() or _env("SMTP_TO", smtp_user)
 
     if not smtp_user or not smtp_pass:
         return False, "SMTP credentials not configured"
@@ -537,6 +538,8 @@ _defaults: dict = {
     "boundary_zones":    [],     # list of (y_pct, label, color_hex)
     "loiter_threshold":  8,
     "model_key":         "YOLOv8n (fastest)",
+    # user-supplied alert recipient email
+    "user_alert_email":  "",
 }
 for k, v in _defaults.items():
     if k not in st.session_state:
@@ -677,14 +680,25 @@ with st.sidebar:
     st.markdown("**📧 Email Alerts**")
     email_enabled = st.checkbox("Enable email alerts", value=False)
     if email_enabled:
+        # ── CHANGE 2: User-supplied recipient email input ──────────────────
+        user_alert_email = st.text_input(
+            "Send alerts to (email)",
+            value=st.session_state.get("user_alert_email", ""),
+            placeholder="your@email.com",
+            key="user_alert_email_input",
+        )
+        st.session_state["user_alert_email"] = user_alert_email
+        # ──────────────────────────────────────────────────────────────────
+
         st.markdown(
             '<div style="background:rgba(0,180,255,.06);border:1px solid rgba(0,180,255,.2);'
             'border-radius:5px;padding:7px 10px;font-family:\'Share Tech Mono\',monospace;'
             'font-size:.65rem;color:#456;line-height:1.6">'
-            'Set in Streamlit Secrets:<br>'
-            '<span style="color:#00c8ff">SMTP_USER SMTP_PASS SMTP_TO</span><br>'
+            'Sender credentials set in Streamlit Secrets:<br>'
+            '<span style="color:#00c8ff">SMTP_USER SMTP_PASS</span><br>'
             'Optional: SMTP_HOST SMTP_PORT<br>'
-            'Gmail → use App Password</div>',
+            'Gmail → use App Password<br>'
+            '<span style="color:#ffc400">Recipient above overrides SMTP_TO</span></div>',
             unsafe_allow_html=True
         )
 
