@@ -472,12 +472,19 @@ def get_category(cid: int, label: str = "", is_weapon_model: bool = False) -> st
 
 
 # ─────────────────────────── EMAIL HELPER ────────────────────────────────────
-def send_email_alert(subject: str, body: str, img_bytes: bytes = None) -> tuple[bool, str]:
+# ── FIX 2: Accept override_to as argument so threads don't read session state ──
+def send_email_alert(subject: str, body: str, img_bytes: bytes = None,
+                     override_to: str = "") -> tuple[bool, str]:
     smtp_host = _env("SMTP_HOST", "smtp.gmail.com")
     smtp_port = int(_env("SMTP_PORT", "587"))
     smtp_user = _env("SMTP_USER", "")
     smtp_pass = _env("SMTP_PASS", "")
-    smtp_to   = _env("SMTP_TO",   smtp_user)
+    # Prefer argument → session state → SMTP_TO secret → sender address
+    smtp_to = (
+        override_to.strip()
+        or st.session_state.get("user_alert_email", "").strip()
+        or _env("SMTP_TO", smtp_user)
+    )
 
     if not smtp_user or not smtp_pass:
         return False, "SMTP credentials not configured"
@@ -537,6 +544,8 @@ _defaults: dict = {
     "boundary_zones":    [],     # list of (y_pct, label, color_hex)
     "loiter_threshold":  8,
     "model_key":         "YOLOv8n (fastest)",
+    # user-supplied alert recipient email
+    "user_alert_email":  "",
 }
 for k, v in _defaults.items():
     if k not in st.session_state:
@@ -677,16 +686,78 @@ with st.sidebar:
     st.markdown("**📧 Email Alerts**")
     email_enabled = st.checkbox("Enable email alerts", value=False)
     if email_enabled:
+        # ── FIX 1: key now matches the session state name exactly ──────────
+        user_alert_email = st.text_input(
+            "Send alerts to (email)",
+            placeholder="your@email.com",
+            key="user_alert_email",   # key = state name → no manual copy needed
+        )
+        # ───────────────────────────────────────────────────────────────────
+
         st.markdown(
             '<div style="background:rgba(0,180,255,.06);border:1px solid rgba(0,180,255,.2);'
             'border-radius:5px;padding:7px 10px;font-family:\'Share Tech Mono\',monospace;'
             'font-size:.65rem;color:#456;line-height:1.6">'
-            'Set in Streamlit Secrets:<br>'
-            '<span style="color:#00c8ff">SMTP_USER SMTP_PASS SMTP_TO</span><br>'
+            'Sender credentials set in Streamlit Secrets:<br>'
+            '<span style="color:#00c8ff">SMTP_USER SMTP_PASS</span><br>'
             'Optional: SMTP_HOST SMTP_PORT<br>'
-            'Gmail → use App Password</div>',
+            'Gmail → use App Password<br>'
+            '<span style="color:#ffc400">Recipient above overrides SMTP_TO</span></div>',
             unsafe_allow_html=True
         )
+
+        # ── TEST EMAIL BUTTON (added) ──────────────────────────────────────
+        # Runs send_email_alert synchronously on the main thread so the real
+        # SMTP error (if any) is shown immediately — no hidden thread failures.
+        st.markdown("---")
+        if st.button("🧪 Send Test Email", use_container_width=True):
+            _test_to = st.session_state.get("user_alert_email", "").strip()
+            if not _test_to:
+                st.warning("⚠️ Enter a recipient email address first.")
+            else:
+                with st.spinner("Connecting to SMTP…"):
+                    _ok, _msg = send_email_alert(
+                        subject="Test Alert — DeepWatch",
+                        body=(
+                            "✅ This is a test email from DeepWatch v1.0.\n\n"
+                            "If you received this, your email configuration is working correctly.\n"
+                            f"Recipient : {_test_to}\n"
+                            f"SMTP host : {_env('SMTP_HOST', 'smtp.gmail.com')}\n"
+                            f"SMTP port : {_env('SMTP_PORT', '587')}\n"
+                            f"Sender    : {_env('SMTP_USER', '(not set)')}\n"
+                        ),
+                        img_bytes=None,
+                        override_to=_test_to,
+                    )
+                if _ok:
+                    st.success(f"✅ Test email sent to {_test_to}")
+                    st.session_state.event_log.appendleft({
+                        "time":  datetime.datetime.now().strftime("%H:%M:%S"),
+                        "msg":   f"Test email ✓ sent → {_test_to}",
+                        "level": "success",
+                        "count": 0,
+                    })
+                else:
+                    st.error(f"✗ FAILED: {_msg}")
+                    st.markdown(
+                        '<div style="background:rgba(255,50,50,.08);border:1px solid '
+                        'rgba(255,50,50,.3);border-radius:5px;padding:8px 10px;'
+                        'font-family:\'Share Tech Mono\',monospace;font-size:.65rem;'
+                        'color:#ff6060;line-height:1.7">'
+                        '<b>Common fixes:</b><br>'
+                        '• Gmail → enable 2-Step Verification → use App Password<br>'
+                        '• Check SMTP_USER / SMTP_PASS in secrets.toml<br>'
+                        '• Verify SMTP_HOST = smtp.gmail.com, PORT = 587<br>'
+                        '• Make sure "Less secure app access" is NOT needed (use App PW)</div>',
+                        unsafe_allow_html=True
+                    )
+                    st.session_state.event_log.appendleft({
+                        "time":  datetime.datetime.now().strftime("%H:%M:%S"),
+                        "msg":   f"Test email ✗ FAILED: {_msg}",
+                        "level": "critical",
+                        "count": 0,
+                    })
+        # ── END TEST EMAIL BUTTON ──────────────────────────────────────────
 
     st.markdown("---")
 
@@ -1208,8 +1279,14 @@ with right_col:
                         f"Snapshot attached. Immediate action recommended.\n"
                         f"DeepWatch v1.0 — Automated Security Alert\n"
                     )
-                    def _send_weapon(subj, body, img_b):
-                        ok, msg = send_email_alert(subj, body, img_b)
+                    # ── FIX 2: Capture email BEFORE thread, pass as argument ──
+                    _recipient = st.session_state.get("user_alert_email", "").strip()
+                    # ── FIX 3: Show instant toast so user sees confirmation ──
+                    if _recipient:
+                        st.toast(f"📧 Weapon alert queued → {_recipient}", icon="🔫")
+                    def _send_weapon(subj, body, img_b, to_email):
+                        ok, msg = send_email_alert(subj, body, img_b,
+                                                   override_to=to_email)
                         st.session_state.email_count += 1
                         st.session_state.event_log.appendleft({
                             "time":  datetime.datetime.now().strftime("%H:%M:%S"),
@@ -1219,7 +1296,7 @@ with right_col:
                         })
                     threading.Thread(
                         target=_send_weapon,
-                        args=(_wsubj, _wbody, snap_bytes),
+                        args=(_wsubj, _wbody, snap_bytes, _recipient),
                         daemon=True
                     ).start()
 
@@ -1297,8 +1374,14 @@ with right_col:
                             f"Time: {datetime.datetime.now().isoformat()}\n"
                             f"Camera: CAM-01\n"
                         )
-                        def _send(subj, body, img_b):
-                            ok, msg = send_email_alert(subj, body, img_b)
+                        # ── FIX 2: Capture email BEFORE thread, pass as argument ──
+                        _recipient = st.session_state.get("user_alert_email", "").strip()
+                        # ── FIX 3: Show instant toast so user sees confirmation ──
+                        if _recipient:
+                            st.toast(f"📧 Alert queued → {_recipient}", icon="📨")
+                        def _send(subj, body, img_b, to_email):
+                            ok, msg = send_email_alert(subj, body, img_b,
+                                                       override_to=to_email)
                             st.session_state.email_count += 1
                             lv = "info" if ok else "critical"
                             st.session_state.event_log.appendleft({
@@ -1309,7 +1392,7 @@ with right_col:
                             })
                         threading.Thread(
                             target=_send,
-                            args=(email_subj, email_body, snap_bytes),
+                            args=(email_subj, email_body, snap_bytes, _recipient),
                             daemon=True
                         ).start()
 
@@ -1465,4 +1548,4 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ─────────────────────────────────────────────────────────────────────────────
-# streamlit run app.py
+# streamlit run app_version2.py
