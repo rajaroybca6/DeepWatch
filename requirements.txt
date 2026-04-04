@@ -3,6 +3,9 @@
 # Python >= 3.10 recommended
 # ─────────────────────────────────────────────────────────────────────────────
 
+# Face Recognition (install first)
+deepface>=0.0.93
+
 # Core framework
 streamlit>=1.35.0
 

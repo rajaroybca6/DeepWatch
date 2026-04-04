@@ -16,10 +16,11 @@ Full-featured AI surveillance dashboard with:
   • CSV / JSON export of event log
   • Streamlit real-time metric updates via st.empty()
   • Full dark cyberpunk UI (Share Tech Mono + Exo 2)
+  • ★ NEW: Face Recognition — known family vs unknown person alerts
 
 Run:
     pip install streamlit streamlit-webrtc ultralytics opencv-python-headless \
-                av numpy Pillow scipy
+                av numpy Pillow scipy deepface
     streamlit run app.py
 """
 
@@ -35,6 +36,13 @@ from streamlit_webrtc import webrtc_streamer, VideoProcessorBase, RTCConfigurati
 from ultralytics import YOLO
 from collections import defaultdict, deque
 from pathlib import Path
+
+# ── ★ NEW: Face Recognition imports ──────────────────────────────────────────
+try:
+    from deepface import DeepFace
+    FACE_RECOGNITION_AVAILABLE = True
+except ImportError:
+    FACE_RECOGNITION_AVAILABLE = False
 
 # ─────────────────────────── PAGE CONFIG ──────────────────────────────────────
 st.set_page_config(
@@ -385,14 +393,10 @@ RTC_CONFIG = RTCConfiguration(_rtc_cfg_dict)
 def load_model(weights: str = "yolov8n.pt"):
     from pathlib import Path
     if not Path(weights).exists() and weights not in ["yolov8n.pt","yolov8s.pt","yolov8m.pt"]:
-        return None   # model file missing — handled gracefully in UI
+        return None
     return YOLO(weights)
 
-# ── Model registry ─────────────────────────────────────────────────────────
-# "is_weapon_model" = True  →  every class the model detects is treated as WEAPON
-# "file"           = filename to look for in the project folder
 MODEL_OPTIONS = {
-    # ── Standard COCO models ──────────────────────────────────────────────
     "YOLOv8n · General (fastest)":  {
         "file": "yolov8n.pt", "is_weapon_model": False,
         "desc": "80 COCO classes · people, cars, animals…"
@@ -405,7 +409,6 @@ MODEL_OPTIONS = {
         "file": "yolov8m.pt", "is_weapon_model": False,
         "desc": "80 COCO classes · highest accuracy"
     },
-    # ── Custom Weapon models (place .pt files in DeepWatch/ folder) ───────
     "🔫 WeaponV1 · 14 Classes":     {
         "file": "weapon_v1.pt", "is_weapon_model": True,
         "desc": "AK47 · Rifle · Revolver · Shotgun · Knife · Axe · Sword · M16…"
@@ -420,18 +423,16 @@ MODEL_OPTIONS = {
     },
 }
 
-# ── Weapon keyword matcher (for custom model label names) ─────────────────
 WEAPON_KEYWORDS = {
     "gun","pistol","rifle","revolver","shotgun","ak47","m16","firearm",
     "weapon","knife","sword","axe","grenade","missile","handgun","sniper",
     "carbine","uzi","glock","assault","explosive","bomb","blade",
 }
 
-# ── COCO class mappings (used only for general models) ────────────────────
 PERSON_IDS  = {0}
 VEHICLE_IDS = {1, 2, 3, 5, 7}
 ANIMAL_IDS  = set(range(14, 24))
-WEAPON_IDS  = {76, 43}                  # scissors, knife in COCO
+WEAPON_IDS  = {76, 43}
 
 CAT_BGR  = {
     "person":  (80,  80,  255),
@@ -456,14 +457,10 @@ CAT_ICON = {
 }
 
 def get_category(cid: int, label: str = "", is_weapon_model: bool = False) -> str:
-    """Smart category detection — handles both COCO and custom weapon models."""
-    # If this is a dedicated weapon model → everything is a weapon
     if is_weapon_model:
         return "weapon"
-    # Check label name for weapon keywords (catches edge cases)
     if label.lower() in WEAPON_KEYWORDS:
         return "weapon"
-    # Standard COCO ID checks
     if cid in PERSON_IDS:  return "person"
     if cid in VEHICLE_IDS: return "vehicle"
     if cid in ANIMAL_IDS:  return "animal"
@@ -472,14 +469,12 @@ def get_category(cid: int, label: str = "", is_weapon_model: bool = False) -> st
 
 
 # ─────────────────────────── EMAIL HELPER ────────────────────────────────────
-# ── FIX 2: Accept override_to as argument so threads don't read session state ──
 def send_email_alert(subject: str, body: str, img_bytes: bytes = None,
                      override_to: str = "") -> tuple[bool, str]:
     smtp_host = _env("SMTP_HOST", "smtp.gmail.com")
     smtp_port = int(_env("SMTP_PORT", "587"))
     smtp_user = _env("SMTP_USER", "")
     smtp_pass = _env("SMTP_PASS", "")
-    # Prefer argument → session state → SMTP_TO secret → sender address
     smtp_to = (
         override_to.strip()
         or st.session_state.get("user_alert_email", "").strip()
@@ -516,40 +511,63 @@ def send_email_alert(subject: str, body: str, img_bytes: bytes = None,
 
 # ─────────────────────── SESSION STATE INIT ──────────────────────────────────
 _defaults: dict = {
-    # counters
     "total_detections":  0,
     "people_count":      0,
     "vehicle_count":     0,
     "alert_count":       0,
     "snap_count":        0,
     "email_count":       0,
-    # per-label counts
     "label_counts":      defaultdict(int),
-    # in-memory log (last 300)
     "event_log":         deque(maxlen=300),
-    # snapshots (last 12)
     "snapshots":         deque(maxlen=12),
-    # heatmap accumulator (updated by processor)
     "heatmap":           None,
-    # loitering: track_id → entry_time
     "loiter_times":      {},
-    # timing
     "start_time":        time.time(),
     "last_alert_time":   0.0,
     "last_snap_time":    0.0,
     "last_weapon_alert": 0.0,
-    # config (overwritten by sidebar)
     "alert_cats":        {"person"},
     "snap_cats":         {"person"},
-    "boundary_zones":    [],     # list of (y_pct, label, color_hex)
+    "boundary_zones":    [],
     "loiter_threshold":  8,
     "model_key":         "YOLOv8n (fastest)",
-    # user-supplied alert recipient email
     "user_alert_email":  "",
+    # ── ★ NEW: Face recognition state ────────────────────────────────────
+    "known_face_images": [],        # list of {"name": str, "img_bgr": ndarray}
+    "last_unknown_alert": 0.0,      # cooldown for unknown person email
+    "unknown_count":     0,         # total unknown persons detected
 }
 for k, v in _defaults.items():
     if k not in st.session_state:
         st.session_state[k] = v
+
+
+# ── ★ NEW: Face Recognition Helper ───────────────────────────────────────────
+def is_known_face(face_img_bgr: np.ndarray) -> tuple[bool, str]:
+    """
+    Compare a face crop against all uploaded family photos.
+    Returns (is_known, name_if_known).
+    Uses DeepFace.verify() — works on Windows, Mac, Linux with just pip.
+    """
+    if not FACE_RECOGNITION_AVAILABLE:
+        return False, ""
+    if not st.session_state.get("known_face_images"):
+        return False, ""
+
+    for known in st.session_state["known_face_images"]:
+        try:
+            result = DeepFace.verify(
+                img1_path=face_img_bgr,
+                img2_path=known["img_bgr"],
+                model_name="VGG-Face",
+                enforce_detection=False,
+                silent=True,
+            )
+            if result.get("verified", False):
+                return True, known["name"]
+        except Exception:
+            continue
+    return False, ""
 
 
 # ──────────────────────────── SIDEBAR ─────────────────────────────────────────
@@ -568,7 +586,6 @@ with st.sidebar:
     model_key = st.selectbox("Model", list(MODEL_OPTIONS.keys()), index=0)
     st.session_state.model_key = model_key
 
-    # Show model description
     _minfo = MODEL_OPTIONS[model_key]
     st.markdown(
         f'<div style="background:rgba(0,180,255,.06);border:1px solid rgba(0,180,255,.15);'
@@ -579,7 +596,6 @@ with st.sidebar:
         unsafe_allow_html=True
     )
 
-    # Check if weapon model file exists
     _model_file = _minfo["file"]
     _model_missing = (_minfo["is_weapon_model"] and not Path(_model_file).exists())
     if _model_missing:
@@ -686,13 +702,11 @@ with st.sidebar:
     st.markdown("**📧 Email Alerts**")
     email_enabled = st.checkbox("Enable email alerts", value=False)
     if email_enabled:
-        # ── FIX 1: key now matches the session state name exactly ──────────
         user_alert_email = st.text_input(
             "Send alerts to (email)",
             placeholder="your@email.com",
-            key="user_alert_email",   # key = state name → no manual copy needed
+            key="user_alert_email",
         )
-        # ───────────────────────────────────────────────────────────────────
 
         st.markdown(
             '<div style="background:rgba(0,180,255,.06);border:1px solid rgba(0,180,255,.2);'
@@ -706,9 +720,6 @@ with st.sidebar:
             unsafe_allow_html=True
         )
 
-        # ── TEST EMAIL BUTTON (added) ──────────────────────────────────────
-        # Runs send_email_alert synchronously on the main thread so the real
-        # SMTP error (if any) is shown immediately — no hidden thread failures.
         st.markdown("---")
         if st.button("🧪 Send Test Email", use_container_width=True):
             _test_to = st.session_state.get("user_alert_email", "").strip()
@@ -757,7 +768,6 @@ with st.sidebar:
                         "level": "critical",
                         "count": 0,
                     })
-        # ── END TEST EMAIL BUTTON ──────────────────────────────────────────
 
     st.markdown("---")
 
@@ -769,6 +779,99 @@ with st.sidebar:
     show_fps_hud   = st.checkbox("Show HUD Overlay",     value=True)
     draw_style     = st.radio("Box Style", ["Corners", "Full Box", "Dot"],
                                label_visibility="collapsed", horizontal=True)
+
+    st.markdown("---")
+
+    # ── ★ NEW: Family Face Registration ──────────────────────────────────────
+    st.markdown("**👨‍👩‍👧 Family Face Recognition**")
+
+    if not FACE_RECOGNITION_AVAILABLE:
+        st.markdown(
+            '<div style="background:rgba(255,100,0,.1);border:1px solid rgba(255,100,0,.4);'
+            'border-radius:5px;padding:6px 10px;font-family:\'Share Tech Mono\',monospace;'
+            'font-size:.63rem;color:#ff8040">'
+            '⚠️ deepface not installed<br>'
+            'Run: pip install deepface</div>',
+            unsafe_allow_html=True
+        )
+        face_recognition_enabled = False
+    else:
+        face_recognition_enabled = st.checkbox("Enable face recognition", value=False, key="fr_enabled")
+
+        if face_recognition_enabled:
+            st.markdown(
+                '<div style="font-family:\'Share Tech Mono\',monospace;font-size:.65rem;'
+                'color:#4a7090;line-height:1.6;margin-bottom:6px">'
+                'Upload 1-5 clear photos per family member.<br>'
+                'Known faces → NO alert.<br>'
+                '<span style="color:#ff6060">Unknown face → INSTANT email alert.</span></div>',
+                unsafe_allow_html=True
+            )
+
+            # Upload photos with name
+            member_name = st.text_input("Person name", placeholder="e.g. Mom, Dad, John",
+                                        key="fr_name_input")
+            uploaded_photos = st.file_uploader(
+                "Upload photo(s)",
+                type=["jpg", "jpeg", "png"],
+                accept_multiple_files=True,
+                key="fr_photo_upload",
+            )
+
+            if st.button("➕ Add to Family", use_container_width=True):
+                if not member_name.strip():
+                    st.warning("Enter a name first.")
+                elif not uploaded_photos:
+                    st.warning("Upload at least one photo.")
+                else:
+                    added = 0
+                    for photo in uploaded_photos:
+                        file_bytes = np.asarray(bytearray(photo.read()), dtype=np.uint8)
+                        img_bgr = cv2.imdecode(file_bytes, cv2.IMREAD_COLOR)
+                        if img_bgr is not None:
+                            st.session_state["known_face_images"].append({
+                                "name":    member_name.strip(),
+                                "img_bgr": img_bgr,
+                            })
+                            added += 1
+                    st.success(f"✅ Added {added} photo(s) for '{member_name.strip()}'")
+                    st.session_state.event_log.appendleft({
+                        "time":  datetime.datetime.now().strftime("%H:%M:%S"),
+                        "msg":   f"👤 Family registered: {member_name.strip()} ({added} photos)",
+                        "level": "success",
+                        "count": 0,
+                    })
+
+            # Show registered family members
+            if st.session_state["known_face_images"]:
+                names = {}
+                for f in st.session_state["known_face_images"]:
+                    names[f["name"]] = names.get(f["name"], 0) + 1
+                family_html = "".join(
+                    f'<div style="display:flex;justify-content:space-between;'
+                    f'font-family:\'Share Tech Mono\',monospace;font-size:.65rem;'
+                    f'color:#00ff88;padding:2px 0">'
+                    f'<span>✓ {n}</span><span style="color:#3a5a70">{c} photo(s)</span></div>'
+                    for n, c in names.items()
+                )
+                st.markdown(
+                    f'<div style="background:rgba(0,255,136,.05);border:1px solid rgba(0,255,136,.2);'
+                    f'border-radius:5px;padding:8px 10px;margin-top:4px">'
+                    f'<div style="font-family:\'Share Tech Mono\',monospace;font-size:.62rem;'
+                    f'color:#2a6040;margin-bottom:4px">REGISTERED FAMILY</div>'
+                    f'{family_html}</div>',
+                    unsafe_allow_html=True
+                )
+
+                if st.button("🗑️ Clear All Family Photos", use_container_width=True):
+                    st.session_state["known_face_images"] = []
+                    st.rerun()
+
+            unknown_cooldown = st.slider("Unknown alert cooldown (s)", 5, 120, 30, 5,
+                                          key="fr_cooldown")
+        else:
+            unknown_cooldown = 30
+    # ── ★ END NEW SECTION ─────────────────────────────────────────────────────
 
     st.markdown("---")
 
@@ -792,20 +895,11 @@ with st.sidebar:
         st.rerun()
 
 
-# Global flag — overwritten by sidebar after model selection
+# Global flag
 IS_WEAPON_MODEL = False
 
 # ─────────────────────────── VIDEO PROCESSOR ──────────────────────────────────
 class AdvancedVideoProcessor(VideoProcessorBase):
-    """
-    Thread-safe video processor with:
-    - YOLOv8 inference (every 2nd frame for performance)
-    - Simple centroid tracker for person counting and loitering
-    - Heatmap accumulation
-    - Configurable drawing styles
-    - Full HUD overlay
-    """
-
     def __init__(self):
         self._lock       = threading.Lock()
         self.detections  : list  = []
@@ -813,20 +907,16 @@ class AdvancedVideoProcessor(VideoProcessorBase):
         self.frame_count : int   = 0
         self.last_frame          = None
         self._t                  = time.time()
-        # Centroid tracker: track_id → {"center":..., "age":..., "entry":...}
         self._trackers   : dict  = {}
         self._next_id    : int   = 0
-        # Heatmap
         self._heatmap            = None
         self._heatmap_decay      = 0.995
-        # Trails: track_id → deque of centers
         self._trails     : dict  = defaultdict(lambda: deque(maxlen=30))
-        # Frame dimensions
         self._h = self._w = 0
+        # ── ★ NEW: face recognition results per frame ─────────────────────
+        self._face_results : list = []   # list of {"box":..,"known":bool,"name":str}
 
-    # ── centroid tracker ──────────────────────────────────────────────────────
     def _update_tracker(self, new_centers: list[tuple[int,int,str]]) -> dict:
-        """Returns map of track_id → (cx,cy,category,entry_time)"""
         MATCH_DIST = 80
         assigned = {}
         free_ids = list(self._trackers.keys())
@@ -848,7 +938,6 @@ class AdvancedVideoProcessor(VideoProcessorBase):
                                        "entry": time.time(), "cat": cat}
                 assigned[tid] = (cx, cy, cat, self._trackers[tid]["entry"])
 
-        # Age out missing tracks
         for tid in list(self._trackers.keys()):
             if tid not in assigned:
                 self._trackers[tid]["age"] += 1
@@ -859,7 +948,6 @@ class AdvancedVideoProcessor(VideoProcessorBase):
 
         return assigned
 
-    # ── draw bounding box ────────────────────────────────────────────────────
     def _draw_box(self, img, x1, y1, x2, y2, color, label, style):
         if style == "Corners":
             blen = min(14, (x2-x1)//3, (y2-y1)//3)
@@ -868,18 +956,16 @@ class AdvancedVideoProcessor(VideoProcessorBase):
                 cv2.line(img,(px,py),(px,py+dy*blen),color,2)
         elif style == "Full Box":
             cv2.rectangle(img,(x1,y1),(x2,y2),color,1)
-        else:  # Dot
+        else:
             cx,cy = (x1+x2)//2,(y1+y2)//2
             cv2.circle(img,(cx,cy),6,color,-1)
             cv2.circle(img,(cx,cy),8,color,1)
 
-        # label background
         (tw,th),_ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, .4, 1)
         cv2.rectangle(img,(x1,y1-th-8),(x1+tw+8,y1),color,-1)
         cv2.putText(img, label, (x1+4,y1-4),
                     cv2.FONT_HERSHEY_SIMPLEX, .4, (0,0,0), 1, cv2.LINE_AA)
 
-    # ── main recv ────────────────────────────────────────────────────────────
     def recv(self, frame: av.VideoFrame) -> av.VideoFrame:
         img = frame.to_ndarray(format="bgr24")
         self.frame_count += 1
@@ -888,7 +974,6 @@ class AdvancedVideoProcessor(VideoProcessorBase):
         self.fps = round(1.0 / elapsed)
         self._t  = now
 
-        # Resize for performance
         h, w = img.shape[:2]
         target_w = 640
         if w > target_w:
@@ -896,11 +981,9 @@ class AdvancedVideoProcessor(VideoProcessorBase):
             img   = cv2.resize(img, (target_w, int(h * scale)))
         self._h, self._w = img.shape[:2]
 
-        # Init heatmap
         if self._heatmap is None or self._heatmap.shape[:2] != img.shape[:2]:
             self._heatmap = np.zeros((self._h, self._w), dtype=np.float32)
 
-        # ── Inference (every 2nd frame) ───────────────────────────────────
         if self.frame_count % 2 == 0:
             results = model_obj(img, conf=conf_thresh,
                                 max_det=max_det, verbose=False)[0]
@@ -925,7 +1008,33 @@ class AdvancedVideoProcessor(VideoProcessorBase):
         with self._lock:
             dets = list(self.detections)
 
-        # ── Heatmap accumulation ──────────────────────────────────────────
+        # ── ★ NEW: Face recognition (every 10th frame to save CPU) ────────
+        if (FACE_RECOGNITION_AVAILABLE
+                and st.session_state.get("fr_enabled", False)
+                and self.frame_count % 10 == 0):
+            face_results = []
+            person_dets = [d for d in dets if d["category"] == "person"]
+            for d in person_dets:
+                x1, y1, x2, y2 = d["box"]
+                # Add padding around person box to get face area (top 40%)
+                face_h = max(1, int((y2 - y1) * 0.4))
+                fx1 = max(0, x1)
+                fy1 = max(0, y1)
+                fx2 = min(self._w, x2)
+                fy2 = min(self._h, y1 + face_h)
+                face_crop = img[fy1:fy2, fx1:fx2]
+                if face_crop.size == 0:
+                    continue
+                known, name = is_known_face(face_crop)
+                face_results.append({
+                    "box":   (x1, y1, x2, y2),
+                    "known": known,
+                    "name":  name,
+                })
+            with self._lock:
+                self._face_results = face_results
+        # ── ★ END NEW ──────────────────────────────────────────────────────
+
         self._heatmap *= self._heatmap_decay
         for d in dets:
             if d["category"] == "person":
@@ -935,18 +1044,15 @@ class AdvancedVideoProcessor(VideoProcessorBase):
                 x1c = max(0, cx-r); x2c = min(self._w, cx+r)
                 self._heatmap[y1c:y2c, x1c:x2c] += 0.15
 
-        # ── Track persons ─────────────────────────────────────────────────
         person_centers = [
             (d["cx"], d["cy"], d["category"])
             for d in dets if d["category"] == "person"
         ]
         track_map = self._update_tracker(person_centers)
 
-        # Update trails
         for tid, (cx,cy,_,_) in track_map.items():
             self._trails[tid].appendleft((cx, cy))
 
-        # ── Draw heatmap ─────────────────────────────────────────────────
         if show_heatmap:
             hm_norm = np.clip(self._heatmap, 0, 1)
             hm_u8   = (hm_norm * 255).astype(np.uint8)
@@ -954,12 +1060,10 @@ class AdvancedVideoProcessor(VideoProcessorBase):
             mask    = hm_u8 > 10
             img[mask] = cv2.addWeighted(img, 0.5, hm_col, 0.5, 0)[mask]
 
-        # ── Draw boundary zones ───────────────────────────────────────────
         zone_breach_labels = []
         for (y_pct, z_label, z_hex) in st.session_state.get("boundary_zones", []):
             ly = int(self._h * (y_pct / 100))
             z_bgr = tuple(int(z_hex.lstrip("#")[i:i+2], 16) for i in (4,2,0))
-            # Dashed line
             dash_len, gap_len = 20, 10
             x = 0
             while x < self._w:
@@ -967,12 +1071,10 @@ class AdvancedVideoProcessor(VideoProcessorBase):
                 x += dash_len + gap_len
             cv2.putText(img, f"▶ {z_label}", (8, ly - 7),
                         cv2.FONT_HERSHEY_SIMPLEX, .42, z_bgr, 1, cv2.LINE_AA)
-            # Check breaches
             for d in dets:
                 if d["category"] == "person" and d["cy"] > ly:
                     zone_breach_labels.append(f"{z_label} BREACH")
 
-        # ── Draw trails ───────────────────────────────────────────────────
         if show_tracks:
             for tid, trail in self._trails.items():
                 pts = list(trail)
@@ -981,7 +1083,6 @@ class AdvancedVideoProcessor(VideoProcessorBase):
                     col = (int(0*alpha), int(180*alpha), int(255*alpha))
                     cv2.line(img, pts[i-1], pts[i], col, 1, cv2.LINE_AA)
 
-        # ── Draw detections ───────────────────────────────────────────────
         loiter_alerts = []
         now_t = time.time()
         for d in dets:
@@ -990,7 +1091,6 @@ class AdvancedVideoProcessor(VideoProcessorBase):
             label_txt = f"{d['label'].upper()} {int(d['conf']*100)}%"
             self._draw_box(img, x1,y1,x2,y2, col, label_txt, draw_style)
 
-        # Loitering overlay on persons
         for tid, (cx,cy,cat,entry_t) in track_map.items():
             duration = now_t - entry_t
             if cat == "person" and duration > 2:
@@ -1001,7 +1101,26 @@ class AdvancedVideoProcessor(VideoProcessorBase):
                 if duration > loiter_thresh and ac_loiter:
                     loiter_alerts.append(f"LOITERING ID{tid} ({int(duration)}s)")
 
-        # ── Crowd density bar ─────────────────────────────────────────────
+        # ── ★ NEW: Draw face recognition boxes on frame ───────────────────
+        with self._lock:
+            face_res = list(self._face_results)
+        for fr in face_res:
+            x1, y1, x2, y2 = fr["box"]
+            if fr["known"]:
+                # Green box = known family member
+                col_face = (0, 255, 100)
+                label_face = f"✓ {fr['name']}"
+            else:
+                # Red box = unknown person
+                col_face = (0, 0, 255)
+                label_face = "⚠ UNKNOWN"
+            cv2.rectangle(img, (x1, y1), (x2, y2), col_face, 2)
+            (tw, th), _ = cv2.getTextSize(label_face, cv2.FONT_HERSHEY_SIMPLEX, .45, 1)
+            cv2.rectangle(img, (x1, y1 - th - 10), (x1 + tw + 8, y1), col_face, -1)
+            cv2.putText(img, label_face, (x1 + 4, y1 - 5),
+                        cv2.FONT_HERSHEY_SIMPLEX, .45, (0, 0, 0), 1, cv2.LINE_AA)
+        # ── ★ END NEW ──────────────────────────────────────────────────────
+
         n_people = sum(1 for d in dets if d["category"] == "person")
         if show_crowd_map and n_people > 0:
             bar_h  = 10
@@ -1013,7 +1132,6 @@ class AdvancedVideoProcessor(VideoProcessorBase):
             cv2.putText(img, f"CROWD: {n_people}/{crowd_n}", (14, 22),
                         cv2.FONT_HERSHEY_SIMPLEX, .38, (200,200,200), 1)
 
-        # ── HUD ───────────────────────────────────────────────────────────
         if show_fps_hud:
             hud_h = 36
             ov = img.copy()
@@ -1029,20 +1147,17 @@ class AdvancedVideoProcessor(VideoProcessorBase):
                         (8, self._h-10), cv2.FONT_HERSHEY_SIMPLEX, .38,
                         (0,180,255), 1, cv2.LINE_AA)
 
-        # Blinking REC dot
         rec_col = (0,0,200) if int(time.time()*2)%2==0 else (40,40,120)
         cv2.circle(img, (self._w-18, 18), 7, rec_col, -1)
         cv2.putText(img, "REC", (self._w-40,22),
                     cv2.FONT_HERSHEY_SIMPLEX, .35, (0,0,200), 1, cv2.LINE_AA)
 
-        # Store frame + extra info
         with self._lock:
             self.last_frame        = img.copy()
             self._zone_breaches    = zone_breach_labels
             self._loiter_alerts    = loiter_alerts
             self._n_people         = n_people
 
-        # Push heatmap snapshot to session state occasionally
         if self.frame_count % 30 == 0:
             hm_u8 = (np.clip(self._heatmap, 0, 1) * 255).astype(np.uint8)
             st.session_state["heatmap"] = cv2.applyColorMap(hm_u8, cv2.COLORMAP_JET)
@@ -1180,7 +1295,6 @@ with left_col:
 # ── RIGHT: DETECTIONS + LOG + STATS ──────────────────────────────────────────
 with right_col:
 
-    # ── Live Detections ─────────────────────────────────────────────────────
     st.markdown('<div class="panel"><div class="panel-hdr">🎯 LIVE DETECTIONS</div>',
                 unsafe_allow_html=True)
 
@@ -1196,8 +1310,9 @@ with right_col:
             zone_breaches = getattr(proc, "_zone_breaches", [])
             loiter_alerts = getattr(proc, "_loiter_alerts", [])
             n_people_live = getattr(proc, "_n_people", 0)
+            # ── ★ NEW: get face results ───────────────────────────────────
+            face_results  = list(getattr(proc, "_face_results", []))
 
-        # ── Update session counters ─────────────────────────────────────
         if dets:
             for d in dets:
                 st.session_state.label_counts[d["label"]] += 1
@@ -1207,17 +1322,14 @@ with right_col:
                     st.session_state.vehicle_count += 1
             st.session_state.total_detections += len(dets)
 
-        # ── Crowd alert ─────────────────────────────────────────────────
         crowd_alert = ""
         if ac_crowd and n_people_live >= crowd_n:
             crowd_alert = f"CROWD DENSITY ALERT — {n_people_live} PEOPLE IN FRAME"
 
-        # ── WEAPON DETECTION — Instant priority alert ────────────────────
         weapon_dets = [d for d in dets if d["category"] == "weapon"]
         now_t2 = time.time()
 
         if weapon_dets and last_frm is not None:
-            # Always show weapon alert — separate cooldown (10s)
             if now_t2 - st.session_state.get("last_weapon_alert", 0) > 10:
                 st.session_state["last_weapon_alert"] = now_t2
                 st.session_state.alert_count += 1
@@ -1236,7 +1348,6 @@ with right_col:
                 )
                 alert_placeholder.markdown(weapon_html, unsafe_allow_html=True)
 
-                # Log weapon event
                 st.session_state.event_log.appendleft({
                     "time":  datetime.datetime.now().strftime("%H:%M:%S"),
                     "msg":   f"🔫 WEAPON — {weapon_labels}",
@@ -1251,7 +1362,6 @@ with right_col:
                     daemon=True
                 ).start()
 
-                # ── Weapon Snapshot (always, no cooldown check) ──────────
                 _, buf      = cv2.imencode(".jpg", last_frm, [cv2.IMWRITE_JPEG_QUALITY, 95])
                 snap_bytes  = buf.tobytes()
                 snap_rgb    = cv2.cvtColor(last_frm, cv2.COLOR_BGR2RGB)
@@ -1264,7 +1374,6 @@ with right_col:
                 st.session_state.snap_count += 1
                 st.session_state.last_snap_time = now_t2
 
-                # ── Weapon Email (instant, always sends) ─────────────────
                 if email_enabled:
                     max_conf_w = max(d["conf"] for d in weapon_dets)
                     _wsubj = f"🔫 WEAPON DETECTED on CAM-01 — IMMEDIATE ACTION REQUIRED"
@@ -1279,14 +1388,11 @@ with right_col:
                         f"Snapshot attached. Immediate action recommended.\n"
                         f"DeepWatch v1.0 — Automated Security Alert\n"
                     )
-                    # ── FIX 2: Capture email BEFORE thread, pass as argument ──
                     _recipient = st.session_state.get("user_alert_email", "").strip()
-                    # ── FIX 3: Show instant toast so user sees confirmation ──
                     if _recipient:
                         st.toast(f"📧 Weapon alert queued → {_recipient}", icon="🔫")
                     def _send_weapon(subj, body, img_b, to_email):
-                        ok, msg = send_email_alert(subj, body, img_b,
-                                                   override_to=to_email)
+                        ok, msg = send_email_alert(subj, body, img_b, override_to=to_email)
                         st.session_state.email_count += 1
                         st.session_state.event_log.appendleft({
                             "time":  datetime.datetime.now().strftime("%H:%M:%S"),
@@ -1300,10 +1406,88 @@ with right_col:
                         daemon=True
                     ).start()
 
-        # ── Trigger regular alerts ───────────────────────────────────────
+        # ── ★ NEW: Unknown person alert + email ───────────────────────────
+        if (FACE_RECOGNITION_AVAILABLE
+                and st.session_state.get("fr_enabled", False)
+                and face_results
+                and last_frm is not None):
+
+            unknown_faces = [f for f in face_results if not f["known"]]
+            if unknown_faces:
+                if now_t2 - st.session_state.get("last_unknown_alert", 0) > unknown_cooldown:
+                    st.session_state["last_unknown_alert"] = now_t2
+                    st.session_state["unknown_count"] = st.session_state.get("unknown_count", 0) + 1
+                    st.session_state.alert_count += 1
+
+                    # Show red alert on screen
+                    unknown_html = (
+                        '<div style="background:linear-gradient(135deg,rgba(255,80,0,.3),'
+                        'rgba(200,40,0,.2));border:2px solid #ff5500;border-radius:8px;'
+                        'padding:12px 16px;margin:5px 0;font-family:\'Share Tech Mono\','
+                        'monospace;font-size:.85rem;color:#ff7030;'
+                        'animation:apulse .6s ease infinite alternate;">'
+                        f'🚨 UNKNOWN PERSON DETECTED — {len(unknown_faces)} unrecognized face(s)</div>'
+                    )
+                    if not weapon_dets:
+                        alert_placeholder.markdown(unknown_html, unsafe_allow_html=True)
+
+                    # Log it
+                    st.session_state.event_log.appendleft({
+                        "time":  datetime.datetime.now().strftime("%H:%M:%S"),
+                        "msg":   f"🚨 UNKNOWN PERSON — {len(unknown_faces)} face(s) not recognized",
+                        "level": "critical",
+                        "count": len(unknown_faces),
+                    })
+                    threading.Thread(
+                        target=db_insert,
+                        args=("critical", "face", "UNKNOWN_PERSON",
+                              f"Unknown person detected ({len(unknown_faces)} face(s))",
+                              1.0, "CAM-01"),
+                        daemon=True
+                    ).start()
+
+                    # Snapshot
+                    _, buf     = cv2.imencode(".jpg", last_frm, [cv2.IMWRITE_JPEG_QUALITY, 95])
+                    snap_bytes = buf.tobytes()
+                    snap_rgb   = cv2.cvtColor(last_frm, cv2.COLOR_BGR2RGB)
+                    st.session_state.snapshots.appendleft({
+                        "img":   snap_rgb,
+                        "time":  datetime.datetime.now().strftime("%H:%M:%S"),
+                        "label": f"🚨 UNKNOWN PERSON",
+                        "bytes": snap_bytes,
+                    })
+                    st.session_state.snap_count += 1
+
+                    # Email
+                    if email_enabled:
+                        _recipient = st.session_state.get("user_alert_email", "").strip()
+                        if _recipient:
+                            st.toast(f"📧 Unknown person alert → {_recipient}", icon="🚨")
+                        _usubj = "🚨 UNKNOWN PERSON DETECTED on CAM-01"
+                        _ubody = (
+                            f"⚠️  UNKNOWN PERSON ALERT — DeepWatch Security System\n"
+                            f"{'='*50}\n\n"
+                            f"🚨 Unrecognized face(s) detected: {len(unknown_faces)}\n"
+                            f"👨‍👩‍👧 This person is NOT in your family registry.\n"
+                            f"📷 Camera: CAM-01\n"
+                            f"🕐 Time: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
+                            f"{'='*50}\n"
+                            f"Snapshot attached. Please verify immediately.\n"
+                            f"DeepWatch v1.0 — Automated Security Alert\n"
+                        )
+                        def _send_unknown(subj, body, img_b, to_email):
+                            ok, msg = send_email_alert(subj, body, img_b, override_to=to_email)
+                            print(f"[DeepWatch unknown alert] {'OK' if ok else 'FAIL: ' + msg}")
+                        threading.Thread(
+                            target=_send_unknown,
+                            args=(_usubj, _ubody, snap_bytes, _recipient),
+                            daemon=True
+                        ).start()
+        # ── ★ END NEW ──────────────────────────────────────────────────────
+
         hit_cats     = {d["category"] for d in dets} & st.session_state.alert_cats
         all_alerts   = []
-        if hit_cats and "weapon" not in hit_cats:  # weapon handled above
+        if hit_cats and "weapon" not in hit_cats:
             all_alerts += [f"DETECTED — {', '.join(sorted(hit_cats)).upper()}"]
         if zone_breaches:
             all_alerts += zone_breaches
@@ -1319,10 +1503,9 @@ with right_col:
             alert_html = "".join(
                 f'<div class="alert-crit">🚨 {a}</div>' for a in all_alerts
             )
-            if not weapon_dets:  # don't overwrite weapon alert
+            if not weapon_dets:
                 alert_placeholder.markdown(alert_html, unsafe_allow_html=True)
 
-            # Log to deque + DB
             for a in all_alerts:
                 entry = {
                     "time":  datetime.datetime.now().strftime("%H:%M:%S"),
@@ -1337,9 +1520,8 @@ with right_col:
                     daemon=True
                 ).start()
 
-            # ── Snapshot for non-weapon alerts ────────────────────────
             snap_hit = {d["category"] for d in dets} & st.session_state.snap_cats
-            snap_hit.discard("weapon")  # weapon snapshot already done above
+            snap_hit.discard("weapon")
             if snap_hit and last_frm is not None:
                 if now_t2 - st.session_state.last_snap_time > snap_cooldown:
                     st.session_state.last_snap_time = now_t2
@@ -1359,7 +1541,6 @@ with right_col:
                         "bytes": snap_bytes,
                     })
 
-                    # ── Email ─────────────────────────────────────────
                     if email_enabled:
                         max_conf = max(
                             (d["conf"] for d in dets if d["category"] in snap_hit),
@@ -1374,14 +1555,11 @@ with right_col:
                             f"Time: {datetime.datetime.now().isoformat()}\n"
                             f"Camera: CAM-01\n"
                         )
-                        # ── FIX 2: Capture email BEFORE thread, pass as argument ──
                         _recipient = st.session_state.get("user_alert_email", "").strip()
-                        # ── FIX 3: Show instant toast so user sees confirmation ──
                         if _recipient:
                             st.toast(f"📧 Alert queued → {_recipient}", icon="📨")
                         def _send(subj, body, img_b, to_email):
-                            ok, msg = send_email_alert(subj, body, img_b,
-                                                       override_to=to_email)
+                            ok, msg = send_email_alert(subj, body, img_b, override_to=to_email)
                             st.session_state.email_count += 1
                             lv = "info" if ok else "critical"
                             st.session_state.event_log.appendleft({
@@ -1396,7 +1574,6 @@ with right_col:
                             daemon=True
                         ).start()
 
-        # ── Object tags + confidence bars ────────────────────────────
         if dets:
             tags_html = "".join(
                 f'<span class="otag t-{d["category"]}">'
@@ -1421,13 +1598,27 @@ with right_col:
                   </div>
                 </div>"""
 
+            # ── ★ NEW: Show face recognition status below detections ───────
+            if FACE_RECOGNITION_AVAILABLE and st.session_state.get("fr_enabled", False) and face_results:
+                known_names = [f["name"] for f in face_results if f["known"]]
+                unknown_cnt = sum(1 for f in face_results if not f["known"])
+                face_html = '<div style="margin-top:8px;padding-top:6px;border-top:1px solid rgba(0,180,255,.1)">'
+                if known_names:
+                    face_html += f'<div style="font-family:\'Share Tech Mono\',monospace;font-size:.68rem;color:#00ff88">✓ KNOWN: {", ".join(known_names)}</div>'
+                if unknown_cnt:
+                    face_html += f'<div style="font-family:\'Share Tech Mono\',monospace;font-size:.68rem;color:#ff5500">⚠ UNKNOWN: {unknown_cnt} person(s)</div>'
+                face_html += '</div>'
+            else:
+                face_html = ""
+            # ── ★ END NEW ──────────────────────────────────────────────────
+
             fps_html = (
                 f'<div style="font-family:\'Share Tech Mono\',monospace;font-size:.65rem;'
                 f'color:#2a4060;margin-top:6px">FPS: {fps_val} | '
                 f'FRAME: {proc.frame_count} | OBJECTS: {len(dets)}</div>'
             )
             detect_placeholder.markdown(
-                tags_html + "<br>" + bars_html + fps_html, unsafe_allow_html=True
+                tags_html + "<br>" + bars_html + face_html + fps_html, unsafe_allow_html=True
             )
         else:
             detect_placeholder.markdown(
@@ -1542,10 +1733,10 @@ with right_col:
 # ─────────────────────────── FOOTER ──────────────────────────────────────────
 st.markdown("""
 <div class="vfooter">
-  DEEPWATCH v1.0  ·  YOLOv8  ·  STREAMLIT  ·  OPENCV  ·  WEBRTC  ·  SQLITE
+  DEEPWATCH v1.0  ·  YOLOv8  ·  STREAMLIT  ·  OPENCV  ·  WEBRTC  ·  SQLITE  ·  DEEPFACE
   &nbsp;|&nbsp; EU AI ACT COMPLIANT PORTFOLIO PROJECT and This is just for Educational Purposses ·  2026.created by Raja Roy
 </div>
 """, unsafe_allow_html=True)
 
 # ─────────────────────────────────────────────────────────────────────────────
-# streamlit run app_version2.py
+# streamlit run app.py
