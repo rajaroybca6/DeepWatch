@@ -3,6 +3,9 @@
 # Python >= 3.10 recommended
 # ─────────────────────────────────────────────────────────────────────────────
 
+# Required for deepface + tensorflow compatibility
+tf-keras
+
 # Face Recognition (install first)
 deepface>=0.0.93
 
