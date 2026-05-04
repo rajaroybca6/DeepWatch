@@ -1,31 +1,7 @@
-# ─────────────────────────────────────────────────────────────────────────────
-# VisionAI Pro v3.0 — Requirements
-# Python >= 3.10 recommended
-# ─────────────────────────────────────────────────────────────────────────────
-
-# Required for deepface + tensorflow compatibility
-tf-keras
-
-# Face Recognition (install first)
-deepface>=0.0.93
-
-# Core framework
 streamlit>=1.35.0
-
-# WebRTC live camera feed
 streamlit-webrtc==0.47.1
-
-# AI / Object Detection (YOLOv8)
 ultralytics>=8.2.0
-
-# Video frame handling (used by streamlit-webrtc)
 av==10.0.0
-
-# Computer vision
 opencv-python-headless>=4.9.0.80
-
-# Numerical computing
 numpy>=1.26.0
-
-# Image processing (used by ultralytics internally)
 Pillow>=10.3.0
