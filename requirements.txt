@@ -12,15 +12,14 @@ deepface>=0.0.93
 # Core framework
 streamlit>=1.35.0
 
-# WebRTC live camera feed — pinned to avoid Tornado 6.4+ BaseAsyncIOLoop removal
-streamlit-webrtc==0.47.6
-tornado>=6.3.3,<6.4
+# WebRTC live camera feed
+streamlit-webrtc==0.47.1
 
 # AI / Object Detection (YOLOv8)
 ultralytics>=8.2.0
 
 # Video frame handling (used by streamlit-webrtc)
-av>=12.0.0
+av==10.0.0
 
 # Computer vision
 opencv-python-headless>=4.9.0.80
@@ -30,9 +29,3 @@ numpy>=1.26.0
 
 # Image processing (used by ultralytics internally)
 Pillow>=10.3.0
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Standard-library modules used (already included with Python — no install needed):
-#   os, cv2 (via opencv above), threading, smtplib, datetime,
-#   json, csv, io, math, sqlite3, base64, collections
-# ─────────────────────────────────────────────────────────────────────────────
