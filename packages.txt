@@ -1,2 +1,10 @@
 libgl1-mesa-dev
 libglib2.0-dev
+ffmpeg
+libavformat-dev
+libavcodec-dev
+libavdevice-dev
+libavutil-dev
+libavfilter-dev
+libswscale-dev
+libswresample-dev
