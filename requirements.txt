@@ -12,9 +12,8 @@ deepface>=0.0.93
 # Core framework
 streamlit>=1.35.0
 
-# WebRTC live camera feed — pinned to avoid Tornado 6.4+ BaseAsyncIOLoop removal
-streamlit-webrtc==0.47.6
-tornado>=6.3.3,<6.4
+# WebRTC live camera feed
+streamlit-webrtc>=0.47.1
 
 # AI / Object Detection (YOLOv8)
 ultralytics>=8.2.0
