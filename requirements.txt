@@ -15,6 +15,9 @@ streamlit>=1.35.0
 # WebRTC live camera feed
 streamlit-webrtc>=0.47.1
 
+# Tornado pinned — streamlit-webrtc incompatible with tornado>=6.3
+tornado==6.2
+
 # AI / Object Detection (YOLOv8)
 ultralytics>=8.2.0
 
@@ -29,9 +32,3 @@ numpy>=1.26.0
 
 # Image processing (used by ultralytics internally)
 Pillow>=10.3.0
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Standard-library modules used (already included with Python — no install needed):
-#   os, cv2 (via opencv above), threading, smtplib, datetime,
-#   json, csv, io, math, sqlite3, base64, collections
-# ─────────────────────────────────────────────────────────────────────────────
